@@ -172,7 +172,7 @@ export default function App() {
                 <Sparkles className="text-white" size={24} />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-black text-white">متابعة المهام اليومية</h1>
+                <h1 className="text-2xl md:text-3xl font-black text-white">الورد اليومي</h1>
                 <p className="text-pink-200/70 text-sm flex items-center gap-2 mt-1">
                   <Calendar size={14} />
                   {today}
