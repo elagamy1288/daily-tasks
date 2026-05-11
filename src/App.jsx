@@ -68,7 +68,7 @@ export default function App() {
       const q = query(collection(db, 'completions'), where(documentId(), '>=', start), where(documentId(), '<=', end));
       const snap = await getDocs(q);
       const data = {};
-      snap.forEach(d => { data[d.id] = d.data().data || {}; });
+      snap.forEach(d => { const docData = d.data(); data[d.id] = { completions: docData.data || {}, tasksCount: docData.tasksCount || null }; });
       setMonthlyData(data);
     } catch (e) {
       console.error(e);
@@ -86,7 +86,7 @@ export default function App() {
   async function saveCompletions(newCompletions) {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, updatedAt: new Date().toISOString() });
       setLastSaved(new Date());
     } catch (e) {
       alert('حدث خطأ في الحفظ. تأكد من الاتصال بالإنترنت.');
@@ -547,10 +547,12 @@ function getDaysInReportMonth(year, month) {
   return days;
 }
 
-function getMemberStats(memberIdx, days, monthlyData, tasksCount) {
+function getMemberStats(memberIdx, days, monthlyData, defaultTasksCount) {
   let complete = 0, incomplete = 0, absent = 0;
   days.forEach(dateKey => {
-    const c = (monthlyData[dateKey] || {})[memberIdx] || [];
+    const dayData = monthlyData[dateKey] || {};
+    const c = (dayData.completions || {})[memberIdx] || [];
+    const tasksCount = dayData.tasksCount || defaultTasksCount;
     const done = c.filter(Boolean).length;
     if (done === tasksCount && tasksCount > 0) complete++;
     else if (done > 0) incomplete++;
@@ -612,11 +614,13 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
           </div>
 
           {/* Header row */}
-          <div className="px-4 py-2 grid grid-cols-4 gap-2 text-xs font-bold text-pink-200/60 border-b" style={{ borderColor: 'rgba(236, 72, 153, 0.12)' }}>
-            <span>الاسم</span>
-            <span className="text-center text-emerald-400">مكتمل</span>
-            <span className="text-center text-amber-400">ناقص</span>
-            <span className="text-center text-rose-400">غائب</span>
+          <div className="px-4 py-2 flex items-center gap-3 text-xs font-bold text-pink-200/60 border-b" style={{ borderColor: 'rgba(236, 72, 153, 0.12)' }}>
+            <div className="w-8 flex-shrink-0"></div>
+            <div className="flex-1 min-w-0">الاسم</div>
+            <div className="w-14 text-center text-emerald-400">مكتمل</div>
+            <div className="w-14 text-center text-amber-400">ناقص</div>
+            <div className="w-14 text-center text-rose-400">غائب</div>
+            <div className="w-4 flex-shrink-0"></div>
           </div>
 
           {members.map((name, idx) => {
@@ -629,19 +633,17 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
                   {/* Mini sparkline */}
                   <div className="flex gap-px mt-1.5 overflow-hidden">
                     {days.map((dateKey, dIdx) => {
-                      const c = (monthlyData[dateKey] || {})[idx] || [];
+                      const c = ((monthlyData[dateKey] || {}).completions || {})[idx] || [];
                       const done = c.filter(Boolean).length;
                       const bg = done === tasks.length && tasks.length > 0 ? '#10b981' : done > 0 ? '#f59e0b' : '#f43f5e';
                       return <div key={dIdx} style={{ width: 4, height: 12, borderRadius: 2, background: bg, opacity: 0.85, flexShrink: 0 }}></div>;
                     })}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-center flex-shrink-0">
-                  <span className="text-emerald-300 font-black text-sm">{stats.complete}</span>
-                  <span className="text-amber-300 font-black text-sm">{stats.incomplete}</span>
-                  <span className="text-rose-300 font-black text-sm">{stats.absent}</span>
-                </div>
-                <ChevronLeft size={14} className="text-pink-300/40 flex-shrink-0" />
+                <div className="w-14 text-center flex-shrink-0"><span className="text-emerald-300 font-black text-sm">{stats.complete}</span></div>
+                <div className="w-14 text-center flex-shrink-0"><span className="text-amber-300 font-black text-sm">{stats.incomplete}</span></div>
+                <div className="w-14 text-center flex-shrink-0"><span className="text-rose-300 font-black text-sm">{stats.absent}</span></div>
+                <ChevronLeft size={14} className="w-4 text-pink-300/40 flex-shrink-0" />
               </button>
             );
           })}
@@ -687,9 +689,11 @@ function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMon
       <div className="space-y-2">
         {days.map((dateKey) => {
           const [y, m, d] = dateKey.split('-').map(Number);
-          const c = (monthlyData[dateKey] || {})[memberIdx] || [];
+          const dayData = monthlyData[dateKey] || {};
+          const c = (dayData.completions || {})[memberIdx] || [];
+          const dayTasksCount = dayData.tasksCount || tasks.length;
           const done = c.filter(Boolean).length;
-          const isComplete = done === tasks.length && tasks.length > 0;
+          const isComplete = done === dayTasksCount && dayTasksCount > 0;
           const isPartial = done > 0 && !isComplete;
           const dayName = new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long' });
 
@@ -704,12 +708,12 @@ function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMon
               <div className="flex-1">
                 <p className="text-white text-sm font-medium">{dayName} {d}</p>
                 <p className="text-xs mt-0.5" style={{ color: isComplete ? '#34d399' : isPartial ? '#fbbf24' : '#fb7185' }}>
-                  {isComplete ? 'مكتمل — كل المهام ✓' : isPartial ? `ناقص — ${done} من ${tasks.length} مهام` : 'غائب — لا توجد مهام مسجلة'}
+                  {isComplete ? 'مكتمل — كل المهام ✓' : isPartial ? `ناقص — ${done} من ${dayTasksCount} مهام` : 'غائب — لا توجد مهام مسجلة'}
                 </p>
               </div>
               {/* Task dots */}
               <div className="flex gap-1 flex-shrink-0">
-                {tasks.map((_, tIdx) => (
+                {Array.from({ length: dayTasksCount }, (_, tIdx) => (
                   <div key={tIdx} className="w-2.5 h-2.5 rounded-full" style={{ background: c[tIdx] ? '#10b981' : 'rgba(244, 63, 94, 0.35)' }}></div>
                 ))}
               </div>
