@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  font-family: 'Cairo', 'Tajawal', system-ui, sans-serif;
+  background: #2d1b2e;
+}
+
+input {
+  font-family: inherit;
+}
