@@ -581,15 +581,15 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
     <div>
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-6 p-4 rounded-2xl" style={{ background: 'rgba(61, 36, 56, 0.55)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-        <button onClick={nextMonth} disabled={isCurrentMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isCurrentMonth ? 'rgba(61, 36, 56, 0.3)' : 'rgba(236, 72, 153, 0.15)', border: '1px solid rgba(236, 72, 153, 0.3)', color: isCurrentMonth ? '#4a3d52' : '#f9c5d1' }}>
-          <ChevronLeft size={20} />
+        <button onClick={prevMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(236, 72, 153, 0.15)', border: '1px solid rgba(236, 72, 153, 0.3)', color: '#f9c5d1' }}>
+          <ChevronRight size={20} />
         </button>
         <div className="text-center">
           <h2 className="text-xl font-black text-white">{monthName}</h2>
           <p className="text-pink-200/60 text-xs mt-1">{days.length} يوم مسجل</p>
         </div>
-        <button onClick={prevMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(236, 72, 153, 0.15)', border: '1px solid rgba(236, 72, 153, 0.3)', color: '#f9c5d1' }}>
-          <ChevronRight size={20} />
+        <button onClick={nextMonth} disabled={isCurrentMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isCurrentMonth ? 'rgba(61, 36, 56, 0.3)' : 'rgba(236, 72, 153, 0.15)', border: '1px solid rgba(236, 72, 153, 0.3)', color: isCurrentMonth ? '#4a3d52' : '#f9c5d1' }}>
+          <ChevronLeft size={20} />
         </button>
       </div>
 
