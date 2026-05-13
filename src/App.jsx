@@ -19,7 +19,7 @@ const formatDisplayDate = (dateKey) => {
 };
 
 const ADMIN_PASSWORD = "quraan";
-const DEFAULT_MEMBERS = Array.from({ length: 16 }, (_, i) => `الفرد ${i + 1}`);
+const DEFAULT_MEMBERS = Array.from({ length: 16 }, (_, i) => `الطالبة ${i + 1}`);
 const DEFAULT_TASKS = ['المهمة الأولى', 'المهمة الثانية', 'المهمة الثالثة', 'المهمة الرابعة', 'المهمة الخامسة'];
 
 export default function App() {
@@ -229,7 +229,7 @@ export default function App() {
 
         {/* Navigation */}
         <div className="grid grid-cols-4 gap-1.5 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={16} />} label="الأفراد" />
+          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={16} />} label="الطالبات" />
           <NavButton active={view === 'admin'} onClick={() => setView('admin')} icon={<TrendingUp size={16} />} label="المشرف" />
           <NavButton active={view === 'report' || view === 'memberReport'} onClick={() => setView('report')} icon={<BarChart2 size={16} />} label="التقرير" />
           <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : setShowPasswordPrompt(true)} icon={<Settings size={16} />} label="الإعدادات" locked={!isAdmin} />
@@ -351,8 +351,8 @@ function MembersGrid({ members, completions, tasksCount, onSelect }) {
   return (
     <div>
       <div className="mb-4 px-2">
-        <h2 className="text-xl font-bold text-white mb-1">اختر اسمك للبدء</h2>
-        <p className="text-pink-200/60 text-sm">اضغط على اسمك لتسجيل المهام المكتملة</p>
+        <h2 className="text-xl font-bold text-white mb-1">اختاري اسمك للبدء</h2>
+        <p className="text-pink-200/60 text-sm">اضغطي على اسمك لتسجيل المهام المكتملة</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {members.map((name, idx) => {
@@ -406,7 +406,7 @@ function MemberView({ memberName, memberIdx, tasks, completion, onToggle, onBack
     <div>
       <button onClick={onBack} className="mb-4 flex items-center gap-2 text-pink-200/70 hover:text-pink-200 transition-colors text-sm">
         <ChevronRight size={16} />
-        <span>العودة لقائمة الأفراد</span>
+        <span>العودة لقائمة الطالبات</span>
       </button>
       <div className="rounded-3xl overflow-hidden mb-6" style={{ background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.18) 0%, rgba(217, 119, 6, 0.05) 100%)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.28)' }}>
         <div className="p-6 md:p-8">
@@ -573,7 +573,7 @@ function RankingBanner({ members, tasks, monthlyData, days }) {
       emptyMsg: 'لا أحد بعد — استمروا في الالتزام!',
     },
     {
-      title: 'يوم نقص واحد ⭐',
+      title: 'المتميزات ⭐',
       sub: 'يوم واحد فقط غير مكتمل',
       list: memberStats.filter(m => m.badDays === 1),
       color: '#c0c0c0',
@@ -584,7 +584,7 @@ function RankingBanner({ members, tasks, monthlyData, days }) {
       glow: false,
     },
     {
-      title: 'يومان نقص 🌟',
+      title: 'المجتهدات 🌟',
       sub: 'يومان غير مكتملان',
       list: memberStats.filter(m => m.badDays === 2),
       color: '#cd7f32',
@@ -615,7 +615,7 @@ function RankingBanner({ members, tasks, monthlyData, days }) {
               <span className="px-2.5 py-1 rounded-full text-xs font-black" style={{
                 background: box.chipBg, color: box.chipColor, border: `1px solid ${box.border}`,
               }}>
-                {box.list.length} شخص
+                {box.list.length} طالبة
               </span>
             </div>
             {box.list.length > 0 ? (
@@ -843,7 +843,7 @@ function SettingsView({ members, tasks, onSave }) {
   function handleSave() {
     const cleanMembers = editMembers.map(m => m.trim()).filter(m => m.length > 0);
     const cleanTasks = editTasks.map(t => t.trim()).filter(t => t.length > 0);
-    if (cleanMembers.length === 0) { alert('يجب إضافة فرد واحد على الأقل'); return; }
+    if (cleanMembers.length === 0) { alert('يجب إضافة طالبة واحدة على الأقل'); return; }
     if (cleanTasks.length === 0) { alert('يجب إضافة مهمة واحدة على الأقل'); return; }
     if (cleanTasks.length > 10) { alert('الحد الأقصى 10 مهام'); return; }
     onSave(cleanMembers, cleanTasks);
@@ -862,7 +862,7 @@ function SettingsView({ members, tasks, onSave }) {
           <AlertCircle size={20} className="text-pink-300 mt-0.5 flex-shrink-0" />
           <div>
             <p className="text-pink-100 font-bold text-sm mb-1">ملاحظة هامة</p>
-            <p className="text-pink-200/70 text-xs leading-relaxed">يمكنك إضافة أو حذف الأفراد والمهام. التعديلات تنطبق على الجميع فوراً عند الضغط على "حفظ التعديلات". الحد الأقصى 10 مهام.</p>
+            <p className="text-pink-200/70 text-xs leading-relaxed">يمكنك إضافة أو حذف الطالبات والمهام. التعديلات تنطبق على الجميع فوراً عند الضغط على "حفظ التعديلات". الحد الأقصى 10 مهام.</p>
           </div>
         </div>
       </div>
@@ -891,8 +891,8 @@ function SettingsView({ members, tasks, onSave }) {
       {/* Members */}
       <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61, 36, 56, 0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-lg flex items-center gap-2"><Users size={18} className="text-pink-300" /><span>الأفراد ({editMembers.length})</span></h3>
-          <button onClick={() => setEditMembers([...editMembers, `الفرد ${editMembers.length + 1}`])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' }}>
+          <h3 className="font-bold text-white text-lg flex items-center gap-2"><Users size={18} className="text-pink-300" /><span>الطالبات ({editMembers.length})</span></h3>
+          <button onClick={() => setEditMembers([...editMembers, `الطالبة ${editMembers.length + 1}`])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' }}>
             <Plus size={14} /><span>إضافة</span>
           </button>
         </div>
@@ -901,7 +901,7 @@ function SettingsView({ members, tasks, onSave }) {
             <div key={idx} className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold flex-shrink-0 text-sm" style={{ background: 'rgba(236, 72, 153, 0.18)', border: '1px solid rgba(236, 72, 153, 0.32)', color: '#f9c5d1' }}>{idx + 1}</div>
               <input type="text" value={name} onChange={(e) => { const a = [...editMembers]; a[idx] = e.target.value; setEditMembers(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} />
-              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن يبقى فرد واحد'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) setEditMembers(editMembers.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن تبقى طالبة واحدة'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) setEditMembers(editMembers.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
                 <Trash2 size={16} className="text-rose-300" />
               </button>
             </div>
