@@ -549,6 +549,77 @@ function StatCard({ icon, label, value, color }) {
   );
 }
 
+// ─── Ranking Banner ──────────────────────────────────────────────────────────
+
+function RankingBanner({ members, tasks, monthlyData, days }) {
+  if (days.length === 0) return null;
+
+  const ranked = members
+    .map((name, idx) => {
+      const stats = getMemberStats(idx, days, monthlyData, tasks.length);
+      return { name, ...stats };
+    })
+    .sort((a, b) => b.complete - a.complete || b.incomplete - a.incomplete || a.absent - b.absent);
+
+  const top3 = ranked.slice(0, 3);
+  if (top3.length === 0 || (top3[0].complete === 0 && top3[0].incomplete === 0)) return null;
+
+  const cfg = [
+    { emoji: '🏆', label: 'الأول',   color: '#ffd700', border: 'rgba(255,215,0,0.5)',    bg: 'rgba(255,215,0,0.1)',    big: true  },
+    { emoji: '🥈', label: 'الثاني',  color: '#c0c0c0', border: 'rgba(192,192,192,0.4)',  bg: 'rgba(192,192,192,0.08)', big: false },
+    { emoji: '🥉', label: 'الثالث',  color: '#cd7f32', border: 'rgba(205,127,50,0.4)',   bg: 'rgba(205,127,50,0.08)', big: false },
+  ];
+
+  // Podium order: 2nd — 1st — 3rd
+  const podium = [
+    { member: top3[1], cfgIdx: 1 },
+    { member: top3[0], cfgIdx: 0 },
+    { member: top3[2], cfgIdx: 2 },
+  ];
+
+  return (
+    <div className="rounded-2xl p-5 mb-5" style={{
+      background: 'linear-gradient(135deg, rgba(61,36,56,0.8) 0%, rgba(45,27,46,0.8) 100%)',
+      border: '1px solid rgba(236,72,153,0.25)',
+      backdropFilter: 'blur(20px)',
+    }}>
+      <p className="text-center text-pink-200/60 text-xs font-bold mb-4 tracking-wide">أعلى المنجزين هذا الشهر</p>
+      <div className="flex justify-center items-end gap-3">
+        {podium.map(({ member, cfgIdx }, i) => {
+          if (!member) return <div key={i} style={{ width: 88 }} />;
+          const c = cfg[cfgIdx];
+          const isFirst = cfgIdx === 0;
+          return (
+            <div key={i} className="flex flex-col items-center" style={{ marginBottom: isFirst ? 0 : -8 }}>
+              <div style={{ fontSize: isFirst ? 42 : 30, lineHeight: 1, marginBottom: 6 }}>{c.emoji}</div>
+              <div className="rounded-2xl px-3 py-3 text-center" style={{
+                background: c.bg,
+                border: `1.5px solid ${c.border}`,
+                width: isFirst ? 108 : 90,
+                minHeight: isFirst ? 96 : 80,
+                boxShadow: isFirst ? `0 8px 24px -8px ${c.color}55` : 'none',
+              }}>
+                <p className="font-black text-white leading-tight mb-1" style={{ fontSize: isFirst ? 13 : 11 }}>
+                  {member.name}
+                </p>
+                <p className="font-black" style={{ color: c.color, fontSize: isFirst ? 26 : 20, lineHeight: 1 }}>
+                  {member.complete}
+                </p>
+                <p className="text-pink-200/40 mt-0.5" style={{ fontSize: 10 }}>يوم مكتمل</p>
+              </div>
+              <div className="mt-2 px-2.5 py-0.5 rounded-full font-bold" style={{
+                background: c.bg, color: c.color, border: `1px solid ${c.border}`, fontSize: 11,
+              }}>
+                {c.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Monthly Report ───────────────────────────────────────────────────────────
 
 function getDaysInReportMonth(year, month) {
@@ -607,6 +678,9 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
           <ChevronLeft size={20} />
         </button>
       </div>
+
+      {/* Ranking */}
+      {!monthlyLoading && <RankingBanner members={members} tasks={tasks} monthlyData={monthlyData} days={days} />}
 
       {/* Legend */}
       <div className="flex items-center gap-4 mb-4 px-1 flex-wrap">
