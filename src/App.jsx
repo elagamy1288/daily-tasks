@@ -488,7 +488,7 @@ function AdminView({ members, tasks, completions, onReset, selectedDate }) {
     <div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard icon={<Check size={20} />} label="مكتمل بالكامل" value={`${fullyComplete} / ${members.length}`} color="emerald" />
-        <StatCard icon={<TrendingUp size={20} />} label="نسبة الإنجاز" value={`${Math.round(overallPercentage)}%`} color="amber" />
+        <StatCard icon={<TrendingUp size={20} />} label="نسبة الإنجاز" value={`${Math.round(overallPercentage)}%`} color="cyan" />
         <StatCard icon={<AlertCircle size={20} />} label="لم يبدأ" value={`${notStarted} / ${members.length}`} color="rose" />
         <StatCard icon={<Award size={20} />} label="إجمالي المهام" value={`${completedTotal} / ${totalTasks}`} color="cyan" />
       </div>
