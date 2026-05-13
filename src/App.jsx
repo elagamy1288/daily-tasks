@@ -550,10 +550,6 @@ function AdminView({ members, tasks, completions, onReset, selectedDate }) {
         </div>
       </div>
 
-      <button onClick={onReset} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 font-bold transition-all hover:scale-[1.01] active:scale-[0.99]" style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fda4af' }}>
-        <RefreshCw size={18} />
-        <span>إعادة تعيين بيانات هذا اليوم</span>
-      </button>
     </div>
   );
 }
