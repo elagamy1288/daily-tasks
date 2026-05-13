@@ -43,6 +43,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({});
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [detailMember, setDetailMember] = useState(null);
+  const [detailMemberName, setDetailMemberName] = useState('');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'app', 'config'), (snap) => {
@@ -73,7 +74,7 @@ export default function App() {
       const q = query(collection(db, 'completions'), where(documentId(), '>=', start), where(documentId(), '<=', end));
       const snap = await getDocs(q);
       const data = {};
-      snap.forEach(d => { const docData = d.data(); data[d.id] = { completions: docData.data || {}, tasksCount: docData.tasksCount || null }; });
+      snap.forEach(d => { const docData = d.data(); data[d.id] = { completions: docData.data || {}, tasksCount: docData.tasksCount || null, members: docData.members || null }; });
       setMonthlyData(data);
     } catch (e) {
       console.error(e);
@@ -91,7 +92,7 @@ export default function App() {
   async function saveCompletions(newCompletions) {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, members, updatedAt: new Date().toISOString() });
       setLastSaved(new Date());
     } catch (e) {
       alert('حدث خطأ في الحفظ. تأكد من الاتصال بالإنترنت.');
@@ -287,14 +288,14 @@ export default function App() {
             monthlyLoading={monthlyLoading}
             reportMonth={reportMonth}
             onMonthChange={(m) => setReportMonth(m)}
-            onMemberDetail={(idx) => { setDetailMember(idx); setView('memberReport'); }}
+            onMemberDetail={(idx, name) => { setDetailMember(idx); setDetailMemberName(name); setView('memberReport'); }}
             onRefresh={() => fetchMonthlyData(reportMonth.year, reportMonth.month)}
           />
         )}
 
         {view === 'memberReport' && detailMember !== null && (
           <MemberReportView
-            memberName={members[detailMember]}
+            memberName={detailMemberName}
             memberIdx={detailMember}
             tasks={tasks}
             monthlyData={monthlyData}
@@ -667,6 +668,16 @@ function RankingBanner({ members, tasks, monthlyData, days }) {
 
 // ─── Monthly Report ───────────────────────────────────────────────────────────
 
+function getReportMembers(monthlyData, days, fallbackMembers) {
+  for (let i = days.length - 1; i >= 0; i--) {
+    const dayData = monthlyData[days[i]];
+    if (dayData && dayData.members && dayData.members.length > 0) {
+      return dayData.members;
+    }
+  }
+  return fallbackMembers;
+}
+
 function getDaysInReportMonth(year, month) {
   const today = new Date();
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
@@ -698,6 +709,7 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
   const isCurrentMonth = reportMonth.year === today.getFullYear() && reportMonth.month === today.getMonth() + 1;
   const days = getDaysInReportMonth(reportMonth.year, reportMonth.month);
   const monthName = new Date(reportMonth.year, reportMonth.month - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+  const reportMembers = getReportMembers(monthlyData, days, members);
 
   const prevMonth = () => {
     const d = new Date(reportMonth.year, reportMonth.month - 2, 1);
@@ -726,7 +738,7 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
       </div>
 
       {/* Ranking */}
-      {!monthlyLoading && <RankingBanner members={members} tasks={tasks} monthlyData={monthlyData} days={days} />}
+      {!monthlyLoading && <RankingBanner members={reportMembers} tasks={tasks} monthlyData={monthlyData} days={days} />}
 
       {/* Legend */}
       <div className="flex items-center gap-4 mb-4 px-1 flex-wrap">
@@ -758,10 +770,10 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
             <div className="w-4 flex-shrink-0"></div>
           </div>
 
-          {members.map((name, idx) => {
+          {reportMembers.map((name, idx) => {
             const stats = getMemberStats(idx, days, monthlyData, tasks.length);
             return (
-              <button key={idx} onClick={() => onMemberDetail(idx)} className="w-full px-4 py-3 flex items-center gap-3 hover:bg-pink-500/5 transition-all border-b text-right" style={{ borderColor: 'rgba(236, 72, 153, 0.08)' }}>
+              <button key={idx} onClick={() => onMemberDetail(idx, name)} className="w-full px-4 py-3 flex items-center gap-3 hover:bg-pink-500/5 transition-all border-b text-right" style={{ borderColor: 'rgba(236, 72, 153, 0.08)' }}>
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: 'rgba(236, 72, 153, 0.18)', color: '#f9c5d1' }}>{idx + 1}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm truncate">{name}</p>
