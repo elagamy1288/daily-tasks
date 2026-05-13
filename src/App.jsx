@@ -74,7 +74,7 @@ export default function App() {
       const q = query(collection(db, 'completions'), where(documentId(), '>=', start), where(documentId(), '<=', end));
       const snap = await getDocs(q);
       const data = {};
-      snap.forEach(d => { const docData = d.data(); data[d.id] = { completions: docData.data || {}, tasksCount: docData.tasksCount || null, members: docData.members || null }; });
+      snap.forEach(d => { const docData = d.data(); data[d.id] = { completions: docData.data || {}, tasksCount: docData.tasksCount || null, members: docData.members || null, tasks: docData.tasks || null }; });
       setMonthlyData(data);
     } catch (e) {
       console.error(e);
@@ -92,7 +92,7 @@ export default function App() {
   async function saveCompletions(newCompletions) {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, members, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, members, tasks, updatedAt: new Date().toISOString() });
       setLastSaved(new Date());
     } catch (e) {
       alert('حدث خطأ في الحفظ. تأكد من الاتصال بالإنترنت.');
@@ -839,31 +839,48 @@ function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMon
           const dayData = monthlyData[dateKey] || {};
           const c = (dayData.completions || {})[memberIdx] || [];
           const dayTasksCount = dayData.tasksCount || tasks.length;
+          const dayTasks = dayData.tasks || null;
           const done = c.filter(Boolean).length;
           const isComplete = done === dayTasksCount && dayTasksCount > 0;
           const isPartial = done > 0 && !isComplete;
           const dayName = new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long' });
 
           return (
-            <div key={dateKey} className="p-3 rounded-xl flex items-center gap-3" style={{
-              background: isComplete ? 'rgba(16, 185, 129, 0.1)' : isPartial ? 'rgba(245, 158, 11, 0.1)' : 'rgba(244, 63, 94, 0.07)',
+            <div key={dateKey} className="rounded-xl overflow-hidden" style={{
               border: `1px solid ${isComplete ? 'rgba(16, 185, 129, 0.28)' : isPartial ? 'rgba(245, 158, 11, 0.28)' : 'rgba(244, 63, 94, 0.18)'}`,
             }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0" style={{ background: isComplete ? 'rgba(16, 185, 129, 0.2)' : isPartial ? 'rgba(245, 158, 11, 0.2)' : 'rgba(244, 63, 94, 0.12)', color: isComplete ? '#34d399' : isPartial ? '#fbbf24' : '#fb7185' }}>
-                {d}
+              <div className="p-3 flex items-center gap-3" style={{
+                background: isComplete ? 'rgba(16, 185, 129, 0.1)' : isPartial ? 'rgba(245, 158, 11, 0.1)' : 'rgba(244, 63, 94, 0.07)',
+              }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0" style={{ background: isComplete ? 'rgba(16, 185, 129, 0.2)' : isPartial ? 'rgba(245, 158, 11, 0.2)' : 'rgba(244, 63, 94, 0.12)', color: isComplete ? '#34d399' : isPartial ? '#fbbf24' : '#fb7185' }}>
+                  {d}
+                </div>
+                <div className="flex-1">
+                  <p className="text-white text-sm font-medium">{dayName} {d}</p>
+                  <p className="text-xs mt-0.5" style={{ color: isComplete ? '#34d399' : isPartial ? '#fbbf24' : '#fb7185' }}>
+                    {isComplete ? 'مكتمل — كل المهام ✓' : isPartial ? `ناقص — ${done} من ${dayTasksCount} مهام` : 'غائب — لا توجد مهام مسجلة'}
+                  </p>
+                </div>
+                {/* Task dots */}
+                <div className="flex gap-1 flex-shrink-0">
+                  {Array.from({ length: dayTasksCount }, (_, tIdx) => (
+                    <div key={tIdx} className="w-2.5 h-2.5 rounded-full" style={{ background: c[tIdx] ? '#10b981' : 'rgba(244, 63, 94, 0.35)' }}></div>
+                  ))}
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-white text-sm font-medium">{dayName} {d}</p>
-                <p className="text-xs mt-0.5" style={{ color: isComplete ? '#34d399' : isPartial ? '#fbbf24' : '#fb7185' }}>
-                  {isComplete ? 'مكتمل — كل المهام ✓' : isPartial ? `ناقص — ${done} من ${dayTasksCount} مهام` : 'غائب — لا توجد مهام مسجلة'}
-                </p>
-              </div>
-              {/* Task dots */}
-              <div className="flex gap-1 flex-shrink-0">
-                {Array.from({ length: dayTasksCount }, (_, tIdx) => (
-                  <div key={tIdx} className="w-2.5 h-2.5 rounded-full" style={{ background: c[tIdx] ? '#10b981' : 'rgba(244, 63, 94, 0.35)' }}></div>
-                ))}
-              </div>
+              {/* Task names — shown only when stored */}
+              {dayTasks && (
+                <div className="px-3 pb-2 pt-1 flex flex-col gap-1" style={{ background: isComplete ? 'rgba(16, 185, 129, 0.04)' : isPartial ? 'rgba(245, 158, 11, 0.04)' : 'rgba(244, 63, 94, 0.03)' }}>
+                  {dayTasks.map((taskName, tIdx) => (
+                    <div key={tIdx} className="flex items-center gap-2 text-xs">
+                      <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: c[tIdx] ? '#10b981' : 'rgba(244,63,94,0.3)' }}>
+                        {c[tIdx] ? <Check size={10} className="text-white" strokeWidth={3} /> : <X size={10} className="text-rose-300" strokeWidth={3} />}
+                      </div>
+                      <span style={{ color: c[tIdx] ? '#6ee7b7' : 'rgba(249,197,209,0.5)', textDecoration: c[tIdx] ? 'none' : 'none' }}>{taskName}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
