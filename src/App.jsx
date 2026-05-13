@@ -554,68 +554,89 @@ function StatCard({ icon, label, value, color }) {
 function RankingBanner({ members, tasks, monthlyData, days }) {
   if (days.length === 0) return null;
 
-  const ranked = members
-    .map((name, idx) => {
-      const stats = getMemberStats(idx, days, monthlyData, tasks.length);
-      return { name, ...stats };
-    })
-    .sort((a, b) => b.complete - a.complete || b.incomplete - a.incomplete || a.absent - b.absent);
+  const memberStats = members.map((name, idx) => {
+    const stats = getMemberStats(idx, days, monthlyData, tasks.length);
+    return { name, badDays: stats.incomplete + stats.absent, ...stats };
+  });
 
-  const top3 = ranked.slice(0, 3);
-  if (top3.length === 0 || (top3[0].complete === 0 && top3[0].incomplete === 0)) return null;
-
-  const cfg = [
-    { emoji: '🏆', label: 'الأول',   color: '#ffd700', border: 'rgba(255,215,0,0.5)',    bg: 'rgba(255,215,0,0.1)',    big: true  },
-    { emoji: '🥈', label: 'الثاني',  color: '#c0c0c0', border: 'rgba(192,192,192,0.4)',  bg: 'rgba(192,192,192,0.08)', big: false },
-    { emoji: '🥉', label: 'الثالث',  color: '#cd7f32', border: 'rgba(205,127,50,0.4)',   bg: 'rgba(205,127,50,0.08)', big: false },
-  ];
-
-  // Podium order: 2nd — 1st — 3rd
-  const podium = [
-    { member: top3[1], cfgIdx: 1 },
-    { member: top3[0], cfgIdx: 0 },
-    { member: top3[2], cfgIdx: 2 },
+  const boxes = [
+    {
+      title: 'لوحة الشرف 🏆',
+      sub: 'أكملوا جميع الأيام بدون أي نقص',
+      list: memberStats.filter(m => m.badDays === 0),
+      color: '#ffd700',
+      border: 'rgba(255,215,0,0.45)',
+      bg: 'rgba(255,215,0,0.07)',
+      chipBg: 'rgba(255,215,0,0.14)',
+      chipColor: '#ffd700',
+      glow: true,
+      emptyMsg: 'لا أحد بعد — استمروا في الالتزام!',
+    },
+    {
+      title: 'يوم نقص واحد ⭐',
+      sub: 'يوم واحد فقط غير مكتمل',
+      list: memberStats.filter(m => m.badDays === 1),
+      color: '#c0c0c0',
+      border: 'rgba(192,192,192,0.3)',
+      bg: 'rgba(192,192,192,0.05)',
+      chipBg: 'rgba(192,192,192,0.12)',
+      chipColor: '#d4d4d4',
+      glow: false,
+    },
+    {
+      title: 'يومان نقص 🌟',
+      sub: 'يومان غير مكتملان',
+      list: memberStats.filter(m => m.badDays === 2),
+      color: '#cd7f32',
+      border: 'rgba(205,127,50,0.3)',
+      bg: 'rgba(205,127,50,0.05)',
+      chipBg: 'rgba(205,127,50,0.12)',
+      chipColor: '#e8a85a',
+      glow: false,
+    },
   ];
 
   return (
-    <div className="rounded-2xl p-5 mb-5" style={{
-      background: 'linear-gradient(135deg, rgba(61,36,56,0.8) 0%, rgba(45,27,46,0.8) 100%)',
-      border: '1px solid rgba(236,72,153,0.25)',
-      backdropFilter: 'blur(20px)',
-    }}>
-      <p className="text-center text-pink-200/60 text-xs font-bold mb-4 tracking-wide">أعلى المنجزين هذا الشهر</p>
-      <div className="flex justify-center items-end gap-3">
-        {podium.map(({ member, cfgIdx }, i) => {
-          if (!member) return <div key={i} style={{ width: 88 }} />;
-          const c = cfg[cfgIdx];
-          const isFirst = cfgIdx === 0;
-          return (
-            <div key={i} className="flex flex-col items-center" style={{ marginBottom: isFirst ? 0 : -8 }}>
-              <div style={{ fontSize: isFirst ? 42 : 30, lineHeight: 1, marginBottom: 6 }}>{c.emoji}</div>
-              <div className="rounded-2xl px-3 py-3 text-center" style={{
-                background: c.bg,
-                border: `1.5px solid ${c.border}`,
-                width: isFirst ? 108 : 90,
-                minHeight: isFirst ? 96 : 80,
-                boxShadow: isFirst ? `0 8px 24px -8px ${c.color}55` : 'none',
-              }}>
-                <p className="font-black text-white leading-tight mb-1" style={{ fontSize: isFirst ? 13 : 11 }}>
-                  {member.name}
-                </p>
-                <p className="font-black" style={{ color: c.color, fontSize: isFirst ? 26 : 20, lineHeight: 1 }}>
-                  {member.complete}
-                </p>
-                <p className="text-pink-200/40 mt-0.5" style={{ fontSize: 10 }}>يوم مكتمل</p>
+    <div className="space-y-3 mb-5">
+      {boxes.map((box, i) => {
+        if (i > 0 && box.list.length === 0) return null;
+        return (
+          <div key={i} className="rounded-2xl p-4" style={{
+            background: box.bg,
+            border: `1.5px solid ${box.border}`,
+            backdropFilter: 'blur(20px)',
+            boxShadow: box.glow ? `0 4px 24px -8px ${box.color}33` : 'none',
+          }}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="font-black text-white text-sm">{box.title}</p>
+                <p className="text-pink-200/50 text-xs mt-0.5">{box.sub}</p>
               </div>
-              <div className="mt-2 px-2.5 py-0.5 rounded-full font-bold" style={{
-                background: c.bg, color: c.color, border: `1px solid ${c.border}`, fontSize: 11,
+              <span className="px-2.5 py-1 rounded-full text-xs font-black" style={{
+                background: box.chipBg, color: box.chipColor, border: `1px solid ${box.border}`,
               }}>
-                {c.label}
-              </div>
+                {box.list.length} شخص
+              </span>
             </div>
-          );
-        })}
-      </div>
+            {box.list.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {box.list.map((m, j) => (
+                  <span key={j} className="px-3 py-1.5 rounded-xl text-xs font-bold" style={{
+                    background: box.chipBg,
+                    color: box.chipColor,
+                    border: `1px solid ${box.border}`,
+                    boxShadow: box.glow ? `0 2px 8px -2px ${box.color}55` : 'none',
+                  }}>
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-pink-200/35 text-xs text-center py-1">{box.emptyMsg}</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
