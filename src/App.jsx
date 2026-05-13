@@ -13,6 +13,11 @@ const getYesterday = () => {
   return formatDateKey(d);
 };
 
+const isSaturday = (dateKey) => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 6;
+};
+
 const formatDisplayDate = (dateKey) => {
   const [y, m, d] = dateKey.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -104,6 +109,7 @@ export default function App() {
   }
 
   function toggleTask(memberIdx, taskIdx) {
+    if (isSaturday(selectedDate)) return;
     const current = completions[memberIdx] || Array(tasks.length).fill(false);
     const updated = [...current];
     while (updated.length < tasks.length) updated.push(false);
@@ -183,26 +189,30 @@ export default function App() {
           {showDateBar && (
             <div className="mt-4 flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => setSelectedDate(getToday())}
+                onClick={() => !isSaturday(getToday()) && setSelectedDate(getToday())}
+                disabled={isSaturday(getToday())}
                 className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
                 style={{
                   background: selectedDate === getToday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
-                  color: selectedDate === getToday() ? 'white' : '#f9c5d1',
+                  color: isSaturday(getToday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getToday() ? 'white' : '#f9c5d1',
                   border: '1px solid rgba(236, 72, 153, 0.3)',
+                  cursor: isSaturday(getToday()) ? 'not-allowed' : 'pointer',
                 }}
               >
-                اليوم
+                {isSaturday(getToday()) ? 'اليوم (إجازة)' : 'اليوم'}
               </button>
               <button
-                onClick={() => setSelectedDate(getYesterday())}
+                onClick={() => !isSaturday(getYesterday()) && setSelectedDate(getYesterday())}
+                disabled={isSaturday(getYesterday())}
                 className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
                 style={{
                   background: selectedDate === getYesterday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
-                  color: selectedDate === getYesterday() ? 'white' : '#f9c5d1',
+                  color: isSaturday(getYesterday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getYesterday() ? 'white' : '#f9c5d1',
                   border: '1px solid rgba(236, 72, 153, 0.3)',
+                  cursor: isSaturday(getYesterday()) ? 'not-allowed' : 'pointer',
                 }}
               >
-                أمس
+                {isSaturday(getYesterday()) ? 'أمس (إجازة)' : 'أمس'}
               </button>
               {/* TEMP: date picker for data entry — remove after finishing */}
               <input
@@ -210,7 +220,13 @@ export default function App() {
                 value={selectedDate}
                 min="2026-05-01"
                 max={getToday()}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => {
+                  if (isSaturday(e.target.value)) {
+                    alert('يوم السبت إجازة، لا يمكن تسجيل بيانات فيه');
+                    return;
+                  }
+                  setSelectedDate(e.target.value);
+                }}
                 className="px-3 py-2 rounded-xl text-sm font-bold"
                 style={{
                   background: 'rgba(61, 36, 56, 0.55)',
@@ -236,11 +252,19 @@ export default function App() {
         </div>
 
         {/* Views */}
-        {view === 'home' && (
+        {(view === 'home' || view === 'member' || view === 'admin') && isSaturday(selectedDate) && (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="text-6xl">🌙</div>
+            <h2 className="text-2xl font-black text-white">يوم السبت إجازة</h2>
+            <p className="text-pink-200/60 text-sm">لا توجد مهام في يوم العطلة</p>
+          </div>
+        )}
+
+        {view === 'home' && !isSaturday(selectedDate) && (
           <MembersGrid members={members} completions={completions} tasksCount={tasks.length} onSelect={(idx) => { setSelectedMember(idx); setView('member'); }} />
         )}
 
-        {view === 'member' && selectedMember !== null && (
+        {view === 'member' && selectedMember !== null && !isSaturday(selectedDate) && (
           <MemberView
             memberName={members[selectedMember]}
             memberIdx={selectedMember}
@@ -251,7 +275,7 @@ export default function App() {
           />
         )}
 
-        {view === 'admin' && (
+        {view === 'admin' && !isSaturday(selectedDate) && (
           <AdminView members={members} tasks={tasks} completions={completions} onReset={resetDay} selectedDate={selectedDate} />
         )}
 
@@ -649,7 +673,8 @@ function getDaysInReportMonth(year, month) {
   const lastDay = isCurrentMonth ? today.getDate() : new Date(year, month, 0).getDate();
   const days = [];
   for (let d = 1; d <= lastDay; d++) {
-    days.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+    const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (!isSaturday(dateKey)) days.push(dateKey);
   }
   return days;
 }
