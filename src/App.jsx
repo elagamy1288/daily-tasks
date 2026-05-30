@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Users, Settings, TrendingUp, Award, AlertCircle, Edit3, Save, X, RefreshCw, Calendar, ChevronRight, ChevronLeft, Sparkles, Plus, Trash2, Lock, BarChart2, Star } from 'lucide-react';
 import { db } from './firebase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc, deleteDoc } from 'firebase/firestore';
 
 const formatDateKey = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -163,6 +163,14 @@ export default function App() {
     }
   }
 
+  async function deleteTajweedSession(sessionId) {
+    try {
+      await deleteDoc(doc(db, 'tajweed', sessionId));
+    } catch (e) {
+      alert('حدث خطأ في الحذف.');
+    }
+  }
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2d1b2e 0%, #3d2438 100%)' }}>
@@ -318,6 +326,7 @@ export default function App() {
             loading={tajweedLoading}
             onRefresh={fetchTajweedSessions}
             onSaveSession={saveTajweedSession}
+            onDeleteSession={deleteTajweedSession}
           />
         )}
 
@@ -1012,14 +1021,47 @@ function StarRating({ value, onChange, readonly = false, size = 'md' }) {
   );
 }
 
-function TajweedSessionForm({ members, onSave, onClose }) {
-  const [date, setDate] = useState(getToday());
+function getNextAvailableDate(existingDates) {
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const key = formatDateKey(d);
+    if (!isSaturday(key) && !existingDates.includes(key)) return key;
+    d.setDate(d.getDate() + 1);
+  }
+  return getToday();
+}
+
+function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
+  const [date, setDate] = useState(() => getNextAvailableDate(existingDates));
   const [ratings, setRatings] = useState({});
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [dateError, setDateError] = useState('');
 
   const ratedCount = Object.values(ratings).filter(v => v > 0).length;
 
+  function handleClose() {
+    if (isDirty && !window.confirm('لم يتم الحفظ بعد. هل تريد الإغلاق؟')) return;
+    onClose();
+  }
+
+  function handleDateChange(val) {
+    if (isSaturday(val)) { alert('يوم السبت إجازة'); return; }
+    setDate(val);
+    setIsDirty(true);
+    setDateError(existingDates.includes(val) ? 'يوجد سجل بهذا التاريخ بالفعل' : '');
+  }
+
+  function handleRatingChange(idx, v) {
+    setRatings(prev => ({ ...prev, [idx]: v }));
+    setIsDirty(true);
+  }
+
   async function handleSave() {
+    if (existingDates.includes(date)) {
+      alert('يوجد سجل بهذا التاريخ بالفعل. اختاري تاريخاً آخر.');
+      return;
+    }
     setSaving(true);
     await onSave({ date, ratings, members, createdAt: new Date().toISOString() });
     setSaving(false);
@@ -1034,30 +1076,30 @@ function TajweedSessionForm({ members, onSave, onClose }) {
             <div className="p-5 border-b" style={{ borderColor: 'rgba(236, 72, 153, 0.2)' }}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-white font-black text-lg">سجل تقييم جديد</h3>
-                <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+                <button onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
                   <X size={16} className="text-rose-300" />
                 </button>
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-pink-200/70 text-sm font-bold">التاريخ:</span>
-                  <input
-                    type="date"
-                    value={date}
-                    max={getToday()}
-                    onChange={(e) => {
-                      if (isSaturday(e.target.value)) { alert('يوم السبت إجازة'); return; }
-                      setDate(e.target.value);
-                    }}
-                    className="px-3 py-2 rounded-xl text-sm font-bold"
-                    style={{ background: 'rgba(45,27,46,0.85)', color: '#f9c5d1', border: '1px solid rgba(236,72,153,0.3)', colorScheme: 'dark', fontFamily: 'inherit' }}
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-pink-200/70 text-sm font-bold">التاريخ:</span>
+                    <input
+                      type="date"
+                      value={date}
+                      max={getToday()}
+                      onChange={(e) => handleDateChange(e.target.value)}
+                      className="px-3 py-2 rounded-xl text-sm font-bold"
+                      style={{ background: 'rgba(45,27,46,0.85)', color: dateError ? '#fb7185' : '#f9c5d1', border: `1px solid ${dateError ? 'rgba(244,63,94,0.6)' : 'rgba(236,72,153,0.3)'}`, colorScheme: 'dark', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  {dateError && <p className="text-rose-400 text-xs">{dateError}</p>}
                 </div>
                 <button
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || !!dateError}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: saving ? 0.7 : 1 }}
+                  style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: (saving || !!dateError) ? 0.5 : 1 }}
                 >
                   {saving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
                   <span>{saving ? 'جاري...' : 'حفظ'}</span>
@@ -1073,11 +1115,10 @@ function TajweedSessionForm({ members, onSave, onClose }) {
               {members.map((name, idx) => (
                 <div key={idx} className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'rgba(236,72,153,0.08)' }}>
                   <span className="text-white text-base font-bold">{name}</span>
-                  <StarRating value={ratings[idx] || 0} onChange={(v) => setRatings({ ...ratings, [idx]: v })} />
+                  <StarRating value={ratings[idx] || 0} onChange={(v) => handleRatingChange(idx, v)} />
                 </div>
               ))}
             </div>
-
           </div>
         </div>
       </div>
@@ -1085,7 +1126,7 @@ function TajweedSessionForm({ members, onSave, onClose }) {
   );
 }
 
-function TajweedSessionCard({ session, expanded, onToggle }) {
+function TajweedSessionCard({ session, expanded, onToggle, onDelete }) {
   const memberList = session.members || [];
   const ratingsObj = session.ratings || {};
   const ratedCount = Object.values(ratingsObj).filter(v => v > 0).length;
@@ -1094,18 +1135,30 @@ function TajweedSessionCard({ session, expanded, onToggle }) {
   const [y, m, d] = session.date.split('-').map(Number);
   const dayLabel = new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
 
+  function handleDelete(e) {
+    e.stopPropagation();
+    if (window.confirm(`هل تريدين حذف سجل ${dayLabel}؟`)) onDelete(session.id);
+  }
+
   return (
     <div className="rounded-2xl overflow-hidden mb-3" style={{ background: 'rgba(61,36,56,0.55)', border: '1px solid rgba(236,72,153,0.18)', backdropFilter: 'blur(20px)' }}>
-      <button onClick={onToggle} className="w-full p-4 flex items-center justify-between text-right">
-        <div>
+      <div className="p-4 flex items-center justify-between">
+        <button onClick={onToggle} className="flex-1 text-right">
           <p className="text-white font-bold text-sm">{dayLabel}</p>
           <p className="text-pink-200/50 text-xs mt-0.5">
             {ratedCount} طالبة مُقيَّمة
             {avgRating > 0 && <span className="mr-2 text-yellow-400/80">· متوسط {avgRating.toFixed(1)} ★</span>}
           </p>
+        </button>
+        <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+          <button onClick={handleDelete} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.25)' }}>
+            <Trash2 size={14} className="text-rose-300" />
+          </button>
+          <button onClick={onToggle}>
+            <ChevronLeft size={18} className="text-pink-300/50 transition-transform duration-200" style={{ transform: expanded ? 'rotate(-90deg)' : 'rotate(0)' }} />
+          </button>
         </div>
-        <ChevronLeft size={18} className="text-pink-300/50 transition-transform duration-200" style={{ transform: expanded ? 'rotate(-90deg)' : 'rotate(0)' }} />
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t" style={{ borderColor: 'rgba(236,72,153,0.12)' }}>
@@ -1127,15 +1180,17 @@ function TajweedSessionCard({ session, expanded, onToggle }) {
   );
 }
 
-function TajweedView({ members, sessions, loading, onRefresh, onSaveSession }) {
+function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onDeleteSession }) {
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  const existingDates = sessions.map(s => s.date);
 
   return (
     <div>
       {showForm && (
         <TajweedSessionForm
           members={members}
+          existingDates={existingDates}
           onSave={async (session) => { await onSaveSession(session); setShowForm(false); onRefresh(); }}
           onClose={() => setShowForm(false)}
         />
@@ -1178,6 +1233,7 @@ function TajweedView({ members, sessions, loading, onRefresh, onSaveSession }) {
             session={session}
             expanded={expandedId === session.id}
             onToggle={() => setExpandedId(expandedId === session.id ? null : session.id)}
+            onDelete={async (id) => { await onDeleteSession(id); onRefresh(); }}
           />
         ))
       )}
