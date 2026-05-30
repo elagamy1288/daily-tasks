@@ -171,6 +171,14 @@ export default function App() {
     }
   }
 
+  async function updateTajweedSession(sessionId, sessionData) {
+    try {
+      await setDoc(doc(db, 'tajweed', sessionId), sessionData);
+    } catch (e) {
+      alert('حدث خطأ في التحديث.');
+    }
+  }
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2d1b2e 0%, #3d2438 100%)' }}>
@@ -326,6 +334,7 @@ export default function App() {
             loading={tajweedLoading}
             onRefresh={fetchTajweedSessions}
             onSaveSession={saveTajweedSession}
+            onUpdateSession={updateTajweedSession}
             onDeleteSession={deleteTajweedSession}
           />
         )}
@@ -1021,6 +1030,35 @@ function StarRating({ value, onChange, readonly = false, size = 'md' }) {
   );
 }
 
+function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = 'تأكيد', cancelLabel = 'إلغاء', confirmDanger = false }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
+      <div className="w-full max-w-xs rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #3d2438 0%, #2d1b2e 100%)', border: '1px solid rgba(236,72,153,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+        <p className="text-white font-bold text-base text-center mb-5 leading-relaxed">{message}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onCancel} className="py-3 rounded-xl font-bold text-pink-200" style={{ background: 'rgba(45,27,46,0.6)', border: '1px solid rgba(236,72,153,0.2)' }}>{cancelLabel}</button>
+          <button onClick={onConfirm} className="py-3 rounded-xl font-bold text-white" style={{ background: confirmDanger ? 'linear-gradient(135deg,#f43f5e,#be123c)' : 'linear-gradient(135deg,#ec4899,#be185d)' }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CloseConfirmDialog({ onSaveClose, onCloseAnyway, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
+      <div className="w-full max-w-xs rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #3d2438 0%, #2d1b2e 100%)', border: '1px solid rgba(236,72,153,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+        <p className="text-white font-bold text-base text-center mb-5">يوجد تقييم غير محفوظ</p>
+        <div className="flex flex-col gap-2">
+          <button onClick={onSaveClose} className="py-3 rounded-xl font-bold text-white" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>حفظ وإغلاق</button>
+          <button onClick={onCloseAnyway} className="py-3 rounded-xl font-bold text-rose-300" style={{ background: 'rgba(244,63,94,0.12)', border: '1px solid rgba(244,63,94,0.25)' }}>إغلاق بدون حفظ</button>
+          <button onClick={onCancel} className="py-3 rounded-xl font-bold text-pink-200" style={{ background: 'rgba(45,27,46,0.6)', border: '1px solid rgba(236,72,153,0.2)' }}>إلغاء</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getNextAvailableDate(existingDates) {
   const d = new Date();
   for (let i = 0; i < 365; i++) {
@@ -1031,25 +1069,23 @@ function getNextAvailableDate(existingDates) {
   return getToday();
 }
 
-function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
-  const [date, setDate] = useState(() => getNextAvailableDate(existingDates));
-  const [ratings, setRatings] = useState({});
+function TajweedSessionForm({ members, existingDates, existingSession, onSave, onClose }) {
+  const isEdit = !!existingSession;
+  const [date, setDate] = useState(() => isEdit ? existingSession.date : getNextAvailableDate(existingDates));
+  const [ratings, setRatings] = useState(isEdit ? { ...(existingSession.ratings || {}) } : {});
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [dateError, setDateError] = useState('');
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const ratedCount = Object.values(ratings).filter(v => v > 0).length;
 
-  function handleClose() {
-    if (isDirty && !window.confirm('لم يتم الحفظ بعد. هل تريد الإغلاق؟')) return;
-    onClose();
-  }
-
   function handleDateChange(val) {
-    if (isSaturday(val)) { alert('يوم السبت إجازة'); return; }
+    if (isSaturday(val)) return;
     setDate(val);
     setIsDirty(true);
-    setDateError(existingDates.includes(val) ? 'يوجد سجل بهذا التاريخ بالفعل' : '');
+    const isDup = existingDates.includes(val) && val !== existingSession?.date;
+    setDateError(isDup ? 'يوجد سجل بهذا التاريخ بالفعل' : '');
   }
 
   function handleRatingChange(idx, v) {
@@ -1057,26 +1093,38 @@ function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
     setIsDirty(true);
   }
 
-  async function handleSave() {
-    if (existingDates.includes(date)) {
-      alert('يوجد سجل بهذا التاريخ بالفعل. اختاري تاريخاً آخر.');
-      return;
-    }
+  async function performSave() {
+    if (dateError) return;
     setSaving(true);
-    await onSave({ date, ratings, members, createdAt: new Date().toISOString() });
+    await onSave({
+      date, ratings, members,
+      createdAt: existingSession?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
     setSaving(false);
+  }
+
+  function handleXClick() {
+    if (isDirty) setShowCloseConfirm(true);
+    else onClose();
   }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)' }}>
+      {showCloseConfirm && (
+        <CloseConfirmDialog
+          onSaveClose={async () => { setShowCloseConfirm(false); await performSave(); onClose(); }}
+          onCloseAnyway={() => { setShowCloseConfirm(false); onClose(); }}
+          onCancel={() => setShowCloseConfirm(false)}
+        />
+      )}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-lg mx-auto p-4 pt-6 pb-8">
-          <div className="rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #3d2438 0%, #2d1b2e 100%)', border: '1px solid rgba(236, 72, 153, 0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-            {/* Header */}
-            <div className="p-5 border-b" style={{ borderColor: 'rgba(236, 72, 153, 0.2)' }}>
+          <div className="rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #3d2438 0%, #2d1b2e 100%)', border: '1px solid rgba(236,72,153,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+            <div className="p-5 border-b" style={{ borderColor: 'rgba(236,72,153,0.2)' }}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-black text-lg">سجل تقييم جديد</h3>
-                <button onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+                <h3 className="text-white font-black text-lg">{isEdit ? 'تعديل التقييم' : 'سجل تقييم جديد'}</h3>
+                <button onClick={handleXClick} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
                   <X size={16} className="text-rose-300" />
                 </button>
               </div>
@@ -1096,10 +1144,10 @@ function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
                   {dateError && <p className="text-rose-400 text-xs">{dateError}</p>}
                 </div>
                 <button
-                  onClick={handleSave}
+                  onClick={performSave}
                   disabled={saving || !!dateError}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white text-sm"
-                  style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: (saving || !!dateError) ? 0.5 : 1 }}
+                  style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)', opacity: (saving || !!dateError) ? 0.5 : 1 }}
                 >
                   {saving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
                   <span>{saving ? 'جاري...' : 'حفظ'}</span>
@@ -1109,8 +1157,6 @@ function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
                 تم تقييم {ratedCount} من {members.length} طالبة — اضغط النجمة مرة ثانية لإلغاء
               </p>
             </div>
-
-            {/* Members */}
             <div>
               {members.map((name, idx) => (
                 <div key={idx} className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'rgba(236,72,153,0.08)' }}>
@@ -1126,7 +1172,7 @@ function TajweedSessionForm({ members, existingDates, onSave, onClose }) {
   );
 }
 
-function TajweedSessionCard({ session, expanded, onToggle, onDelete }) {
+function TajweedSessionCard({ session, expanded, onToggle, onEdit, onDelete }) {
   const memberList = session.members || [];
   const ratingsObj = session.ratings || {};
   const ratedCount = Object.values(ratingsObj).filter(v => v > 0).length;
@@ -1135,27 +1181,25 @@ function TajweedSessionCard({ session, expanded, onToggle, onDelete }) {
   const [y, m, d] = session.date.split('-').map(Number);
   const dayLabel = new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  function handleDelete(e) {
-    e.stopPropagation();
-    if (window.confirm(`هل تريدين حذف سجل ${dayLabel}؟`)) onDelete(session.id);
-  }
-
   return (
     <div className="rounded-2xl overflow-hidden mb-3" style={{ background: 'rgba(61,36,56,0.55)', border: '1px solid rgba(236,72,153,0.18)', backdropFilter: 'blur(20px)' }}>
-      <div className="p-4 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center gap-2">
         <button onClick={onToggle} className="flex-1 text-right">
-          <p className="text-white font-bold text-sm">{dayLabel}</p>
-          <p className="text-pink-200/50 text-xs mt-0.5">
+          <p className="text-white font-black text-base">{dayLabel}</p>
+          <p className="text-pink-200/60 text-sm mt-0.5 font-medium">
             {ratedCount} طالبة مُقيَّمة
-            {avgRating > 0 && <span className="mr-2 text-yellow-400/80">· متوسط {avgRating.toFixed(1)} ★</span>}
+            {avgRating > 0 && <span className="mr-2" style={{ color: '#fbbf24' }}>· متوسط {avgRating.toFixed(1)} ★</span>}
           </p>
         </button>
-        <div className="flex items-center gap-2 mr-2 flex-shrink-0">
-          <button onClick={handleDelete} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.25)' }}>
-            <Trash2 size={14} className="text-rose-300" />
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button onClick={onEdit} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(236,72,153,0.15)', border: '1px solid rgba(236,72,153,0.25)' }}>
+            <Edit3 size={15} className="text-pink-300" />
           </button>
-          <button onClick={onToggle}>
-            <ChevronLeft size={18} className="text-pink-300/50 transition-transform duration-200" style={{ transform: expanded ? 'rotate(-90deg)' : 'rotate(0)' }} />
+          <button onClick={onDelete} className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.25)' }}>
+            <Trash2 size={15} className="text-rose-300" />
+          </button>
+          <button onClick={onToggle} className="w-9 h-9 flex items-center justify-center">
+            <ChevronLeft size={26} className="text-pink-300/70 transition-transform duration-200" style={{ transform: expanded ? 'rotate(-90deg)' : 'rotate(0)' }} />
           </button>
         </div>
       </div>
@@ -1165,12 +1209,11 @@ function TajweedSessionCard({ session, expanded, onToggle, onDelete }) {
           {memberList.map((name, idx) => {
             const rating = ratingsObj[idx] || 0;
             return (
-              <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b" style={{ borderColor: 'rgba(236,72,153,0.06)' }}>
-                <span className="text-white text-sm">{name}</span>
+              <div key={idx} className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'rgba(236,72,153,0.06)' }}>
+                <span className="text-white text-sm font-medium">{name}</span>
                 {rating > 0
                   ? <StarRating value={rating} readonly size="sm" />
-                  : <span className="text-pink-200/25 text-xs">لم تُقيَّم</span>
-                }
+                  : <span className="text-pink-200/25 text-xs">لم تُقيَّم</span>}
               </div>
             );
           })}
@@ -1180,10 +1223,29 @@ function TajweedSessionCard({ session, expanded, onToggle, onDelete }) {
   );
 }
 
-function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onDeleteSession }) {
+function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onUpdateSession, onDeleteSession }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
   const existingDates = sessions.map(s => s.date);
+
+  function openNew() { setEditingSession(null); setShowForm(true); }
+  function openEdit(session) { setEditingSession(session); setShowForm(true); }
+
+  async function handleSave(data) {
+    if (editingSession) await onUpdateSession(editingSession.id, data);
+    else await onSaveSession(data);
+    setShowForm(false);
+    onRefresh();
+  }
+
+  async function handleDelete() {
+    await onDeleteSession(deleteConfirmId);
+    setDeleteConfirmId(null);
+    onRefresh();
+  }
 
   return (
     <div>
@@ -1191,8 +1253,20 @@ function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onD
         <TajweedSessionForm
           members={members}
           existingDates={existingDates}
-          onSave={async (session) => { await onSaveSession(session); setShowForm(false); onRefresh(); }}
+          existingSession={editingSession}
+          onSave={handleSave}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {deleteConfirmId && (
+        <ConfirmDialog
+          message="هل تريدين حذف هذا السجل نهائياً؟"
+          confirmLabel="حذف"
+          cancelLabel="إلغاء"
+          confirmDanger={true}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteConfirmId(null)}
         />
       )}
 
@@ -1202,16 +1276,11 @@ function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onD
           <p className="text-pink-200/40 text-xs mt-0.5">{sessions.length} سجل</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onRefresh} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-pink-200" style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.2)' }}>
-            <RefreshCw size={12} />
+          <button onClick={onRefresh} className="w-9 h-9 flex items-center justify-center rounded-xl text-pink-200" style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.2)' }}>
+            <RefreshCw size={14} />
           </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm"
-            style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', boxShadow: '0 8px 20px -8px rgba(236,72,153,0.45)' }}
-          >
-            <Plus size={16} />
-            <span>سجل جديد</span>
+          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)', boxShadow: '0 8px 20px -8px rgba(236,72,153,0.45)' }}>
+            <Plus size={16} /><span>سجل جديد</span>
           </button>
         </div>
       </div>
@@ -1233,7 +1302,8 @@ function TajweedView({ members, sessions, loading, onRefresh, onSaveSession, onD
             session={session}
             expanded={expandedId === session.id}
             onToggle={() => setExpandedId(expandedId === session.id ? null : session.id)}
-            onDelete={async (id) => { await onDeleteSession(id); onRefresh(); }}
+            onEdit={() => openEdit(session)}
+            onDelete={() => setDeleteConfirmId(session.id)}
           />
         ))
       )}
