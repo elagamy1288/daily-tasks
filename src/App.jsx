@@ -215,27 +215,6 @@ export default function App() {
               >
                 {isSaturday(getYesterday()) ? 'أمس (إجازة)' : 'أمس'}
               </button>
-              {/* TEMP: date picker for data entry — remove after finishing */}
-              <input
-                type="date"
-                value={selectedDate}
-                min="2026-05-01"
-                max={getToday()}
-                onChange={(e) => {
-                  if (isSaturday(e.target.value)) {
-                    alert('يوم السبت إجازة، لا يمكن تسجيل بيانات فيه');
-                    return;
-                  }
-                  setSelectedDate(e.target.value);
-                }}
-                className="px-3 py-2 rounded-xl text-sm font-bold"
-                style={{
-                  background: 'rgba(61, 36, 56, 0.55)',
-                  color: '#f9c5d1',
-                  border: '1px solid rgba(236, 72, 153, 0.3)',
-                  colorScheme: 'dark',
-                }}
-              />
               <span className="text-pink-200/60 text-sm flex items-center gap-1">
                 <Calendar size={13} />
                 {formatDisplayDate(selectedDate)}
