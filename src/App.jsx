@@ -333,16 +333,16 @@ function NavButton({ active, onClick, icon, label, locked }) {
   return (
     <button
       onClick={onClick}
-      className="relative flex items-center justify-center gap-1.5 px-2 py-3 rounded-xl font-bold text-xs md:text-sm transition-all"
+      className="relative flex flex-col items-center justify-center gap-1 px-1 py-2.5 rounded-xl font-bold transition-all"
       style={{
         background: active ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'transparent',
         color: active ? 'white' : '#f9c5d1',
         boxShadow: active ? '0 10px 25px -10px rgba(236, 72, 153, 0.5)' : 'none',
       }}
     >
+      {locked && !active && <Lock size={9} className="opacity-50 absolute top-1.5 left-1.5" />}
       {icon}
-      <span>{label}</span>
-      {locked && !active && <Lock size={10} className="opacity-60" />}
+      <span className="text-xs leading-tight text-center">{label}</span>
     </button>
   );
 }
@@ -986,10 +986,10 @@ function SettingsView({ members, tasks, onSave }) {
 // ─── Tajweed Components ───────────────────────────────────────────────────────
 
 function StarRating({ value, onChange, readonly = false, size = 'md' }) {
-  const sz = size === 'sm' ? 18 : 24;
+  const sz = size === 'sm' ? 22 : 30;
   return (
-    <div className="flex gap-0.5 flex-row-reverse" dir="ltr">
-      {[5, 4, 3, 2, 1].map(star => (
+    <div className="flex gap-0.5" dir="rtl">
+      {[1, 2, 3, 4, 5].map(star => (
         <button
           key={star}
           onClick={() => !readonly && onChange(star === value ? 0 : star)}
@@ -1038,47 +1038,46 @@ function TajweedSessionForm({ members, onSave, onClose }) {
                   <X size={16} className="text-rose-300" />
                 </button>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-pink-200/70 text-sm font-bold">التاريخ:</span>
-                <input
-                  type="date"
-                  value={date}
-                  max={getToday()}
-                  onChange={(e) => {
-                    if (isSaturday(e.target.value)) { alert('يوم السبت إجازة'); return; }
-                    setDate(e.target.value);
-                  }}
-                  className="px-3 py-2 rounded-xl text-sm font-bold"
-                  style={{ background: 'rgba(45,27,46,0.85)', color: '#f9c5d1', border: '1px solid rgba(236,72,153,0.3)', colorScheme: 'dark', fontFamily: 'inherit' }}
-                />
+              <div className="flex items-center gap-2 flex-wrap justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-pink-200/70 text-sm font-bold">التاريخ:</span>
+                  <input
+                    type="date"
+                    value={date}
+                    max={getToday()}
+                    onChange={(e) => {
+                      if (isSaturday(e.target.value)) { alert('يوم السبت إجازة'); return; }
+                      setDate(e.target.value);
+                    }}
+                    className="px-3 py-2 rounded-xl text-sm font-bold"
+                    style={{ background: 'rgba(45,27,46,0.85)', color: '#f9c5d1', border: '1px solid rgba(236,72,153,0.3)', colorScheme: 'dark', fontFamily: 'inherit' }}
+                  />
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white text-sm"
+                  style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: saving ? 0.7 : 1 }}
+                >
+                  {saving ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                  <span>{saving ? 'جاري...' : 'حفظ'}</span>
+                </button>
               </div>
               <p className="text-pink-200/40 text-xs mt-2">
-                تم تقييم {ratedCount} من {members.length} طالبة — اضغط النجمة مرة ثانية لإلغاء التقييم
+                تم تقييم {ratedCount} من {members.length} طالبة — اضغط النجمة مرة ثانية لإلغاء
               </p>
             </div>
 
             {/* Members */}
             <div>
               {members.map((name, idx) => (
-                <div key={idx} className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: 'rgba(236,72,153,0.08)' }}>
-                  <span className="text-white text-sm font-medium">{name}</span>
+                <div key={idx} className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'rgba(236,72,153,0.08)' }}>
+                  <span className="text-white text-base font-bold">{name}</span>
                   <StarRating value={ratings[idx] || 0} onChange={(v) => setRatings({ ...ratings, [idx]: v })} />
                 </div>
               ))}
             </div>
 
-            {/* Save */}
-            <div className="p-4">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full p-3.5 rounded-2xl font-bold text-white flex items-center justify-center gap-2"
-                style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: saving ? 0.7 : 1, boxShadow: '0 10px 25px -10px rgba(236,72,153,0.45)' }}
-              >
-                {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                <span>{saving ? 'جاري الحفظ...' : 'حفظ التقييم'}</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
