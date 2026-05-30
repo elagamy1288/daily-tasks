@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Users, Settings, TrendingUp, Award, AlertCircle, Edit3, Save, X, RefreshCw, Calendar, ChevronRight, ChevronLeft, Sparkles, Plus, Trash2, Lock, BarChart2 } from 'lucide-react';
+import { Check, Users, Settings, TrendingUp, Award, AlertCircle, Edit3, Save, X, RefreshCw, Calendar, ChevronRight, ChevronLeft, Sparkles, Plus, Trash2, Lock, BarChart2, Star } from 'lucide-react';
 import { db } from './firebase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc } from 'firebase/firestore';
 
 const formatDateKey = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -44,6 +44,9 @@ export default function App() {
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [detailMember, setDetailMember] = useState(null);
   const [detailMemberName, setDetailMemberName] = useState('');
+  const [tajweedSessions, setTajweedSessions] = useState([]);
+  const [tajweedLoading, setTajweedLoading] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState('settings');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'app', 'config'), (snap) => {
@@ -89,6 +92,10 @@ export default function App() {
     }
   }, [view, reportMonth]);
 
+  useEffect(() => {
+    if (view === 'tajweed') fetchTajweedSessions();
+  }, [view]);
+
   async function saveCompletions(newCompletions) {
     setSaving(true);
     try {
@@ -130,10 +137,30 @@ export default function App() {
     if (password === ADMIN_PASSWORD) {
       setIsAdmin(true);
       setShowPasswordPrompt(false);
-      setView('settings');
+      setView(passwordTarget);
       return true;
     }
     return false;
+  }
+
+  const fetchTajweedSessions = async () => {
+    setTajweedLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'tajweed'));
+      const sessions = [];
+      snap.forEach(d => sessions.push({ id: d.id, ...d.data() }));
+      sessions.sort((a, b) => b.date.localeCompare(a.date));
+      setTajweedSessions(sessions);
+    } catch (e) { console.error(e); }
+    finally { setTajweedLoading(false); }
+  };
+
+  async function saveTajweedSession(sessionData) {
+    try {
+      await addDoc(collection(db, 'tajweed'), sessionData);
+    } catch (e) {
+      alert('حدث خطأ في حفظ التقييم. تأكد من الاتصال بالإنترنت.');
+    }
   }
 
   if (loading) {
@@ -224,11 +251,12 @@ export default function App() {
         </div>
 
         {/* Navigation */}
-        <div className="grid grid-cols-4 gap-1.5 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={16} />} label="الطالبات" />
-          <NavButton active={view === 'admin'} onClick={() => setView('admin')} icon={<TrendingUp size={16} />} label="المشرف" />
-          <NavButton active={view === 'report' || view === 'memberReport'} onClick={() => setView('report')} icon={<BarChart2 size={16} />} label="التقرير" />
-          <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : setShowPasswordPrompt(true)} icon={<Settings size={16} />} label="الإعدادات" locked={!isAdmin} />
+        <div className="grid grid-cols-5 gap-1 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
+          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={15} />} label="الطالبات" />
+          <NavButton active={view === 'admin'} onClick={() => setView('admin')} icon={<TrendingUp size={15} />} label="المشرف" />
+          <NavButton active={view === 'report' || view === 'memberReport'} onClick={() => setView('report')} icon={<BarChart2 size={15} />} label="التقرير" />
+          <NavButton active={view === 'tajweed'} onClick={() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true))} icon={<Star size={15} />} label="التجويد" locked={!isAdmin} />
+          <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : (setPasswordTarget('settings'), setShowPasswordPrompt(true))} icon={<Settings size={15} />} label="الإعدادات" locked={!isAdmin} />
         </div>
 
         {/* Views */}
@@ -280,6 +308,16 @@ export default function App() {
             monthlyData={monthlyData}
             reportMonth={reportMonth}
             onBack={() => setView('report')}
+          />
+        )}
+
+        {view === 'tajweed' && (
+          <TajweedView
+            members={members}
+            sessions={tajweedSessions}
+            loading={tajweedLoading}
+            onRefresh={fetchTajweedSessions}
+            onSaveSession={saveTajweedSession}
           />
         )}
 
@@ -941,6 +979,209 @@ function SettingsView({ members, tasks, onSave }) {
       <button onClick={handleSave} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-white transition-all hover:scale-[1.01] active:scale-[0.99]" style={{ background: savedMsg ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', boxShadow: '0 10px 25px -10px rgba(236, 72, 153, 0.45)' }}>
         {savedMsg ? <><Check size={18} /><span>تم الحفظ بنجاح</span></> : <><Save size={18} /><span>حفظ التعديلات</span></>}
       </button>
+    </div>
+  );
+}
+
+// ─── Tajweed Components ───────────────────────────────────────────────────────
+
+function StarRating({ value, onChange, readonly = false, size = 'md' }) {
+  const sz = size === 'sm' ? 18 : 24;
+  return (
+    <div className="flex gap-0.5 flex-row-reverse" dir="ltr">
+      {[5, 4, 3, 2, 1].map(star => (
+        <button
+          key={star}
+          onClick={() => !readonly && onChange(star === value ? 0 : star)}
+          disabled={readonly}
+          style={{
+            fontSize: sz,
+            color: star <= value ? '#ffd700' : 'rgba(255,255,255,0.15)',
+            cursor: readonly ? 'default' : 'pointer',
+            lineHeight: 1,
+            padding: '1px',
+            background: 'none',
+            border: 'none',
+            transition: 'color 0.15s',
+          }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TajweedSessionForm({ members, onSave, onClose }) {
+  const [date, setDate] = useState(getToday());
+  const [ratings, setRatings] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const ratedCount = Object.values(ratings).filter(v => v > 0).length;
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave({ date, ratings, members, createdAt: new Date().toISOString() });
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)' }}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-lg mx-auto p-4 pt-6 pb-8">
+          <div className="rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #3d2438 0%, #2d1b2e 100%)', border: '1px solid rgba(236, 72, 153, 0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+            {/* Header */}
+            <div className="p-5 border-b" style={{ borderColor: 'rgba(236, 72, 153, 0.2)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-black text-lg">سجل تقييم جديد</h3>
+                <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+                  <X size={16} className="text-rose-300" />
+                </button>
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-pink-200/70 text-sm font-bold">التاريخ:</span>
+                <input
+                  type="date"
+                  value={date}
+                  max={getToday()}
+                  onChange={(e) => {
+                    if (isSaturday(e.target.value)) { alert('يوم السبت إجازة'); return; }
+                    setDate(e.target.value);
+                  }}
+                  className="px-3 py-2 rounded-xl text-sm font-bold"
+                  style={{ background: 'rgba(45,27,46,0.85)', color: '#f9c5d1', border: '1px solid rgba(236,72,153,0.3)', colorScheme: 'dark', fontFamily: 'inherit' }}
+                />
+              </div>
+              <p className="text-pink-200/40 text-xs mt-2">
+                تم تقييم {ratedCount} من {members.length} طالبة — اضغط النجمة مرة ثانية لإلغاء التقييم
+              </p>
+            </div>
+
+            {/* Members */}
+            <div>
+              {members.map((name, idx) => (
+                <div key={idx} className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: 'rgba(236,72,153,0.08)' }}>
+                  <span className="text-white text-sm font-medium">{name}</span>
+                  <StarRating value={ratings[idx] || 0} onChange={(v) => setRatings({ ...ratings, [idx]: v })} />
+                </div>
+              ))}
+            </div>
+
+            {/* Save */}
+            <div className="p-4">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full p-3.5 rounded-2xl font-bold text-white flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', opacity: saving ? 0.7 : 1, boxShadow: '0 10px 25px -10px rgba(236,72,153,0.45)' }}
+              >
+                {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                <span>{saving ? 'جاري الحفظ...' : 'حفظ التقييم'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TajweedSessionCard({ session, expanded, onToggle }) {
+  const memberList = session.members || [];
+  const ratingsObj = session.ratings || {};
+  const ratedCount = Object.values(ratingsObj).filter(v => v > 0).length;
+  const ratedValues = Object.values(ratingsObj).filter(v => v > 0);
+  const avgRating = ratedValues.length > 0 ? (ratedValues.reduce((a, b) => a + b, 0) / ratedValues.length) : 0;
+  const [y, m, d] = session.date.split('-').map(Number);
+  const dayLabel = new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  return (
+    <div className="rounded-2xl overflow-hidden mb-3" style={{ background: 'rgba(61,36,56,0.55)', border: '1px solid rgba(236,72,153,0.18)', backdropFilter: 'blur(20px)' }}>
+      <button onClick={onToggle} className="w-full p-4 flex items-center justify-between text-right">
+        <div>
+          <p className="text-white font-bold text-sm">{dayLabel}</p>
+          <p className="text-pink-200/50 text-xs mt-0.5">
+            {ratedCount} طالبة مُقيَّمة
+            {avgRating > 0 && <span className="mr-2 text-yellow-400/80">· متوسط {avgRating.toFixed(1)} ★</span>}
+          </p>
+        </div>
+        <ChevronLeft size={18} className="text-pink-300/50 transition-transform duration-200" style={{ transform: expanded ? 'rotate(-90deg)' : 'rotate(0)' }} />
+      </button>
+
+      {expanded && (
+        <div className="border-t" style={{ borderColor: 'rgba(236,72,153,0.12)' }}>
+          {memberList.map((name, idx) => {
+            const rating = ratingsObj[idx] || 0;
+            return (
+              <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b" style={{ borderColor: 'rgba(236,72,153,0.06)' }}>
+                <span className="text-white text-sm">{name}</span>
+                {rating > 0
+                  ? <StarRating value={rating} readonly size="sm" />
+                  : <span className="text-pink-200/25 text-xs">لم تُقيَّم</span>
+                }
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TajweedView({ members, sessions, loading, onRefresh, onSaveSession }) {
+  const [showForm, setShowForm] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+
+  return (
+    <div>
+      {showForm && (
+        <TajweedSessionForm
+          members={members}
+          onSave={async (session) => { await onSaveSession(session); setShowForm(false); onRefresh(); }}
+          onClose={() => setShowForm(false)}
+        />
+      )}
+
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-xl font-black text-white">تقييم التجويد</h2>
+          <p className="text-pink-200/40 text-xs mt-0.5">{sessions.length} سجل</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onRefresh} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-pink-200" style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.2)' }}>
+            <RefreshCw size={12} />
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm"
+            style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', boxShadow: '0 8px 20px -8px rgba(236,72,153,0.45)' }}
+          >
+            <Plus size={16} />
+            <span>سجل جديد</span>
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-10 h-10 border-4 border-pink-400 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="text-5xl">⭐</div>
+          <p className="text-white font-bold">لا توجد سجلات بعد</p>
+          <p className="text-pink-200/50 text-sm">اضغط "سجل جديد" لإضافة أول تقييم</p>
+        </div>
+      ) : (
+        sessions.map(session => (
+          <TajweedSessionCard
+            key={session.id}
+            session={session}
+            expanded={expandedId === session.id}
+            onToggle={() => setExpandedId(expandedId === session.id ? null : session.id)}
+          />
+        ))
+      )}
     </div>
   );
 }
