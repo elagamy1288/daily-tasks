@@ -48,6 +48,7 @@ export default function App() {
   const [tajweedSessions, setTajweedSessions] = useState([]);
   const [tajweedLoading, setTajweedLoading] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState('settings');
+  const [mutabaahTab, setMutabaahTab] = useState('daily');
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'app', 'config'), (snap) => {
@@ -102,10 +103,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (view === 'report' || view === 'memberReport') {
+    if ((view === 'mutabaah' && mutabaahTab === 'monthly') || view === 'memberReport') {
       fetchMonthlyData(reportMonth.year, reportMonth.month);
     }
-  }, [view, reportMonth]);
+  }, [view, mutabaahTab, reportMonth]);
 
   useEffect(() => {
     if (view === 'tajweed') fetchTajweedSessions();
@@ -216,7 +217,7 @@ export default function App() {
     );
   }
 
-  const showDateBar = view === 'home' || view === 'member' || view === 'admin';
+  const showDateBar = view === 'home' || view === 'member' || (view === 'mutabaah' && mutabaahTab === 'daily');
 
   return (
     <div dir="rtl" style={{ fontFamily: "'Cairo', 'Tajawal', system-ui, sans-serif", background: 'linear-gradient(135deg, #2d1b2e 0%, #3d2438 50%, #2d1b2e 100%)', minHeight: '100vh' }}>
@@ -293,16 +294,15 @@ export default function App() {
         </div>
 
         {/* Navigation */}
-        <div className="grid grid-cols-5 gap-1 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={15} />} label="الطالبات" />
-          <NavButton active={view === 'admin'} onClick={() => setView('admin')} icon={<TrendingUp size={15} />} label="المشرف" />
-          <NavButton active={view === 'report' || view === 'memberReport'} onClick={() => setView('report')} icon={<BarChart2 size={15} />} label="التقرير" />
-          <NavButton active={view === 'tajweed'} onClick={() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true))} icon={<Star size={15} />} label="التجويد" locked={!isAdmin} />
-          <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : (setPasswordTarget('settings'), setShowPasswordPrompt(true))} icon={<Settings size={15} />} label="الإعدادات" locked={!isAdmin} />
+        <div className="grid grid-cols-4 gap-1 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
+          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={16} />} label="الطالبات" />
+          <NavButton active={view === 'mutabaah' || view === 'memberReport'} onClick={() => setView('mutabaah')} icon={<BarChart2 size={16} />} label="المتابعة" />
+          <NavButton active={view === 'tajweed'} onClick={() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true))} icon={<Star size={16} />} label="التجويد" locked={!isAdmin} />
+          <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : (setPasswordTarget('settings'), setShowPasswordPrompt(true))} icon={<Settings size={16} />} label="الإعدادات" locked={!isAdmin} />
         </div>
 
         {/* Views */}
-        {(view === 'home' || view === 'member' || view === 'admin') && isSaturday(selectedDate) && (
+        {(view === 'home' || view === 'member' || (view === 'mutabaah' && mutabaahTab === 'daily')) && isSaturday(selectedDate) && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="text-6xl">🌙</div>
             <h2 className="text-2xl font-black text-white">يوم السبت إجازة</h2>
@@ -310,7 +310,7 @@ export default function App() {
           </div>
         )}
 
-        {(view === 'home' || view === 'member' || view === 'admin') && !isSaturday(selectedDate) && effectiveTasks.length === 0 && (
+        {(view === 'home' || view === 'member' || (view === 'mutabaah' && mutabaahTab === 'daily')) && !isSaturday(selectedDate) && effectiveTasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="text-6xl">📋</div>
             <h2 className="text-2xl font-black text-white">لم تُحدَّد مهام لهذا اليوم</h2>
@@ -333,20 +333,23 @@ export default function App() {
           />
         )}
 
-        {view === 'admin' && !isSaturday(selectedDate) && effectiveTasks.length > 0 && (
-          <AdminView members={members} tasks={effectiveTasks} completions={completions} onReset={resetDay} selectedDate={selectedDate} />
-        )}
-
-        {view === 'report' && (
-          <ReportView
+        {view === 'mutabaah' && (
+          <MutabaahView
+            activeTab={mutabaahTab}
+            onTabChange={setMutabaahTab}
             members={members}
-            tasks={tasks}
+            tasks={effectiveTasks}
+            completions={completions}
+            selectedDate={selectedDate}
+            isSaturday={isSaturday(selectedDate)}
+            noTasks={effectiveTasks.length === 0}
             monthlyData={monthlyData}
             monthlyLoading={monthlyLoading}
             reportMonth={reportMonth}
             onMonthChange={(m) => setReportMonth(m)}
             onMemberDetail={(idx, name) => { setDetailMember(idx); setDetailMemberName(name); setView('memberReport'); }}
             onRefresh={() => fetchMonthlyData(reportMonth.year, reportMonth.month)}
+            globalTasks={tasks}
           />
         )}
 
@@ -732,6 +735,53 @@ function RankingBanner({ members, tasks, monthlyData, days }) {
 }
 
 // ─── Monthly Report ───────────────────────────────────────────────────────────
+
+// ─── Mutabaah (merged daily + monthly) ───────────────────────────────────────
+
+function MutabaahView({ activeTab, onTabChange, members, tasks, completions, selectedDate, isSaturday, noTasks, monthlyData, monthlyLoading, reportMonth, onMonthChange, onMemberDetail, onRefresh, globalTasks }) {
+  return (
+    <div>
+      {/* Tabs */}
+      <div className="grid grid-cols-2 gap-1.5 mb-6 p-1.5 rounded-2xl" style={{ background: 'rgba(45,27,46,0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236,72,153,0.18)' }}>
+        <button
+          onClick={() => onTabChange('daily')}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+          style={{ background: activeTab === 'daily' ? 'linear-gradient(135deg,#ec4899,#be185d)' : 'transparent', color: activeTab === 'daily' ? 'white' : '#f9c5d1', boxShadow: activeTab === 'daily' ? '0 8px 20px -8px rgba(236,72,153,0.5)' : 'none' }}
+        >
+          <TrendingUp size={16} />
+          <span>يومي</span>
+        </button>
+        <button
+          onClick={() => onTabChange('monthly')}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all"
+          style={{ background: activeTab === 'monthly' ? 'linear-gradient(135deg,#ec4899,#be185d)' : 'transparent', color: activeTab === 'monthly' ? 'white' : '#f9c5d1', boxShadow: activeTab === 'monthly' ? '0 8px 20px -8px rgba(236,72,153,0.5)' : 'none' }}
+        >
+          <Calendar size={16} />
+          <span>شهري</span>
+        </button>
+      </div>
+
+      {/* Daily tab */}
+      {activeTab === 'daily' && !isSaturday && !noTasks && (
+        <AdminView members={members} tasks={tasks} completions={completions} selectedDate={selectedDate} />
+      )}
+
+      {/* Monthly tab */}
+      {activeTab === 'monthly' && (
+        <ReportView
+          members={members}
+          tasks={globalTasks}
+          monthlyData={monthlyData}
+          monthlyLoading={monthlyLoading}
+          reportMonth={reportMonth}
+          onMonthChange={onMonthChange}
+          onMemberDetail={onMemberDetail}
+          onRefresh={onRefresh}
+        />
+      )}
+    </div>
+  );
+}
 
 function getReportMembers(monthlyData, days, fallbackMembers) {
   for (let i = days.length - 1; i >= 0; i--) {
