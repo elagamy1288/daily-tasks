@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Check, Users, Settings, TrendingUp, Award, AlertCircle, Edit3, Save, X, RefreshCw, Calendar, ChevronRight, ChevronLeft, Sparkles, Plus, Trash2, Lock, BarChart2, Star } from 'lucide-react';
 import { db } from './firebase';
 import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
@@ -49,6 +49,10 @@ export default function App() {
   const [tajweedLoading, setTajweedLoading] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState('settings');
   const [mutabaahTab, setMutabaahTab] = useState('daily');
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [showSettingsLeaveConfirm, setShowSettingsLeaveConfirm] = useState(false);
+  const [pendingNavFn, setPendingNavFn] = useState(null);
+  const settingsSaveRef = useRef(null);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'app', 'config'), (snap) => {
@@ -206,6 +210,15 @@ export default function App() {
     }
   }
 
+  function guardedNav(fn) {
+    if (view === 'settings' && settingsDirty) {
+      setPendingNavFn(() => fn);
+      setShowSettingsLeaveConfirm(true);
+    } else {
+      fn();
+    }
+  }
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2d1b2e 0%, #3d2438 100%)' }}>
@@ -223,6 +236,23 @@ export default function App() {
     <div dir="rtl" style={{ fontFamily: "'Cairo', 'Tajawal', system-ui, sans-serif", background: 'linear-gradient(135deg, #2d1b2e 0%, #3d2438 50%, #2d1b2e 100%)', minHeight: '100vh' }}>
       {showPasswordPrompt && (
         <PasswordPrompt onSubmit={handlePasswordSubmit} onCancel={() => setShowPasswordPrompt(false)} />
+      )}
+
+      {showSettingsLeaveConfirm && (
+        <CloseConfirmDialog
+          onSaveClose={async () => {
+            if (settingsSaveRef.current) await settingsSaveRef.current();
+            setSettingsDirty(false);
+            setShowSettingsLeaveConfirm(false);
+            if (pendingNavFn) { pendingNavFn(); setPendingNavFn(null); }
+          }}
+          onCloseAnyway={() => {
+            setSettingsDirty(false);
+            setShowSettingsLeaveConfirm(false);
+            if (pendingNavFn) { pendingNavFn(); setPendingNavFn(null); }
+          }}
+          onCancel={() => { setShowSettingsLeaveConfirm(false); setPendingNavFn(null); }}
+        />
       )}
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -295,9 +325,9 @@ export default function App() {
 
         {/* Navigation */}
         <div className="grid grid-cols-4 gap-1 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-          <NavButton active={view === 'home' || view === 'member'} onClick={() => { setView('home'); setSelectedMember(null); }} icon={<Users size={16} />} label="الطالبات" />
-          <NavButton active={view === 'mutabaah' || view === 'memberReport'} onClick={() => setView('mutabaah')} icon={<BarChart2 size={16} />} label="المتابعة" />
-          <NavButton active={view === 'tajweed'} onClick={() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true))} icon={<Star size={16} />} label="التجويد" locked={!isAdmin} />
+          <NavButton active={view === 'home' || view === 'member'} onClick={() => guardedNav(() => { setView('home'); setSelectedMember(null); })} icon={<Users size={16} />} label="الطالبات" />
+          <NavButton active={view === 'mutabaah' || view === 'memberReport'} onClick={() => guardedNav(() => setView('mutabaah'))} icon={<BarChart2 size={16} />} label="المتابعة" />
+          <NavButton active={view === 'tajweed'} onClick={() => guardedNav(() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true)))} icon={<Star size={16} />} label="التجويد" locked={!isAdmin} />
           <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : (setPasswordTarget('settings'), setShowPasswordPrompt(true))} icon={<Settings size={16} />} label="الإعدادات" locked={!isAdmin} />
         </div>
 
@@ -377,7 +407,7 @@ export default function App() {
         )}
 
         {view === 'settings' && (
-          <SettingsView members={members} tasks={tasks} onSave={saveConfig} onSaveDailyTasks={saveDailyTasksConfig} />
+          <SettingsView members={members} tasks={tasks} onSave={saveConfig} onSaveDailyTasks={saveDailyTasksConfig} onDirtyChange={setSettingsDirty} saveRef={settingsSaveRef} />
         )}
       </div>
     </div>
@@ -1007,31 +1037,42 @@ function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMon
   );
 }
 
-function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
+function SettingsView({ members, tasks, onSave, onSaveDailyTasks, onDirtyChange, saveRef }) {
   const [editMembers, setEditMembers] = useState([...members]);
   const [savedMsg, setSavedMsg] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   // Daily tasks state
   const [taskDate, setTaskDate] = useState(getToday());
-  const [dailyTasks, setDailyTasks] = useState([...tasks]);
+  const [dailyTasks, setDailyTasks] = useState([]);
   const [dailyLoading, setDailyLoading] = useState(false);
   const [dailySavedMsg, setDailySavedMsg] = useState(false);
+
+  function markDirty() { setIsDirty(true); onDirtyChange(true); }
+  function markClean() { setIsDirty(false); onDirtyChange(false); }
 
   useEffect(() => {
     async function load() {
       setDailyLoading(true);
       try {
         const snap = await getDoc(doc(db, 'daily_tasks', taskDate));
-        if (snap.exists() && snap.data().tasks?.length) {
-          setDailyTasks(snap.data().tasks);
-        } else {
-          setDailyTasks([]);
-        }
+        setDailyTasks(snap.exists() && snap.data().tasks?.length ? snap.data().tasks : []);
       } catch(e) { setDailyTasks([]); }
       setDailyLoading(false);
     }
     load();
   }, [taskDate]);
+
+  // Expose unified save for parent's "حفظ وإغلاق"
+  useEffect(() => {
+    saveRef.current = async () => {
+      const cleanTasks = dailyTasks.map(t => t.trim()).filter(t => t.length > 0);
+      if (cleanTasks.length > 0) await onSaveDailyTasks(taskDate, cleanTasks);
+      const cleanMembers = editMembers.map(m => m.trim()).filter(m => m.length > 0);
+      if (cleanMembers.length > 0) onSave(cleanMembers, tasks);
+      markClean();
+    };
+  });
 
   async function handleSaveDailyTasks() {
     const clean = dailyTasks.map(t => t.trim()).filter(t => t.length > 0);
@@ -1041,6 +1082,7 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
     setDailyTasks(clean);
     setDailySavedMsg(true);
     setTimeout(() => setDailySavedMsg(false), 2000);
+    markClean();
   }
 
   function handleSave() {
@@ -1050,6 +1092,7 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
     setEditMembers(cleanMembers);
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 2000);
+    markClean();
   }
 
   const inputStyle = { background: 'rgba(45, 27, 46, 0.85)', border: '1px solid rgba(236, 72, 153, 0.22)', fontFamily: 'inherit' };
@@ -1084,8 +1127,8 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
             {dailyTasks.map((task, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>{idx + 1}</div>
-                <input type="text" value={task} onChange={(e) => { const a = [...dailyTasks]; a[idx] = e.target.value; setDailyTasks(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} placeholder={`وصف المهمة ${idx + 1}`} />
-                <button onClick={() => { if (dailyTasks.length <= 1) return; setDailyTasks(dailyTasks.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+                <input type="text" value={task} onChange={(e) => { const a = [...dailyTasks]; a[idx] = e.target.value; setDailyTasks(a); markDirty(); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} placeholder={`وصف المهمة ${idx + 1}`} />
+                <button onClick={() => { if (dailyTasks.length <= 1) return; setDailyTasks(dailyTasks.filter((_, i) => i !== idx)); markDirty(); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
                   <Trash2 size={16} className="text-rose-300" />
                 </button>
               </div>
@@ -1094,7 +1137,7 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
         )}
 
         <div className="flex gap-2">
-          <button onClick={() => { if (dailyTasks.length < 10) setDailyTasks([...dailyTasks, '']); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-white" style={{ background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.3)' }}>
+          <button onClick={() => { if (dailyTasks.length < 10) { setDailyTasks([...dailyTasks, '']); markDirty(); } }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-white" style={{ background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.3)' }}>
             <Plus size={14} /><span>إضافة مهمة</span>
           </button>
           <button onClick={handleSaveDailyTasks} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-bold text-white text-sm" style={{ background: dailySavedMsg ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#ec4899,#be185d)' }}>
@@ -1107,7 +1150,7 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
       <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61,36,56,0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236,72,153,0.18)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-white text-lg flex items-center gap-2"><Users size={18} className="text-pink-300" /><span>الطالبات ({editMembers.length})</span></h3>
-          <button onClick={() => setEditMembers([...editMembers, `الطالبة ${editMembers.length + 1}`])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>
+          <button onClick={() => { setEditMembers([...editMembers, `الطالبة ${editMembers.length + 1}`]); markDirty(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>
             <Plus size={14} /><span>إضافة</span>
           </button>
         </div>
@@ -1115,8 +1158,8 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
           {editMembers.map((name, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold flex-shrink-0 text-sm" style={{ background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.32)', color: '#f9c5d1' }}>{idx + 1}</div>
-              <input type="text" value={name} onChange={(e) => { const a = [...editMembers]; a[idx] = e.target.value; setEditMembers(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} />
-              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن تبقى طالبة واحدة'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) setEditMembers(editMembers.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+              <input type="text" value={name} onChange={(e) => { const a = [...editMembers]; a[idx] = e.target.value; setEditMembers(a); markDirty(); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} />
+              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن تبقى طالبة واحدة'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) { setEditMembers(editMembers.filter((_, i) => i !== idx)); markDirty(); } }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
                 <Trash2 size={16} className="text-rose-300" />
               </button>
             </div>
