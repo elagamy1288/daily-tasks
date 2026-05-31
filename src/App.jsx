@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Users, Settings, TrendingUp, Award, AlertCircle, Edit3, Save, X, RefreshCw, Calendar, ChevronRight, ChevronLeft, Sparkles, Plus, Trash2, Lock, BarChart2, Star } from 'lucide-react';
 import { db } from './firebase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDocs, documentId, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
 const formatDateKey = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -44,6 +44,7 @@ export default function App() {
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [detailMember, setDetailMember] = useState(null);
   const [detailMemberName, setDetailMemberName] = useState('');
+  const [activeTasks, setActiveTasks] = useState(null);
   const [tajweedSessions, setTajweedSessions] = useState([]);
   const [tajweedLoading, setTajweedLoading] = useState(false);
   const [passwordTarget, setPasswordTarget] = useState('settings');
@@ -66,6 +67,20 @@ export default function App() {
       setCompletions(snap.exists() ? (snap.data().data || {}) : {});
     }, () => {});
     return () => unsub();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    async function loadActiveTasks() {
+      try {
+        const snap = await getDoc(doc(db, 'daily_tasks', selectedDate));
+        if (snap.exists() && snap.data().tasks?.length) {
+          setActiveTasks(snap.data().tasks);
+        } else {
+          setActiveTasks(null);
+        }
+      } catch(e) { setActiveTasks(null); }
+    }
+    loadActiveTasks();
   }, [selectedDate]);
 
   const fetchMonthlyData = async (year, month) => {
@@ -99,7 +114,7 @@ export default function App() {
   async function saveCompletions(newCompletions) {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: tasks.length, members, tasks, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, 'completions', selectedDate), { data: newCompletions, tasksCount: effectiveTasks.length, members, tasks: effectiveTasks, updatedAt: new Date().toISOString() });
       setLastSaved(new Date());
     } catch (e) {
       alert('حدث خطأ في الحفظ. تأكد من الاتصال بالإنترنت.');
@@ -116,9 +131,20 @@ export default function App() {
     }
   }
 
+  async function saveDailyTasksConfig(date, tasksList) {
+    try {
+      await setDoc(doc(db, 'daily_tasks', date), { tasks: tasksList, updatedAt: new Date().toISOString() });
+      if (date === selectedDate) setActiveTasks(tasksList);
+    } catch(e) {
+      alert('حدث خطأ في حفظ مهام اليوم.');
+    }
+  }
+
+  const effectiveTasks = activeTasks || tasks;
+
   function toggleTask(memberIdx, taskIdx) {
     if (isSaturday(selectedDate)) return;
-    const current = completions[memberIdx] || Array(tasks.length).fill(false);
+    const current = completions[memberIdx] || Array(effectiveTasks.length).fill(false);
     const updated = [...current];
     while (updated.length < tasks.length) updated.push(false);
     updated[taskIdx] = !updated[taskIdx];
@@ -285,22 +311,22 @@ export default function App() {
         )}
 
         {view === 'home' && !isSaturday(selectedDate) && (
-          <MembersGrid members={members} completions={completions} tasksCount={tasks.length} onSelect={(idx) => { setSelectedMember(idx); setView('member'); }} />
+          <MembersGrid members={members} completions={completions} tasksCount={effectiveTasks.length} onSelect={(idx) => { setSelectedMember(idx); setView('member'); }} />
         )}
 
         {view === 'member' && selectedMember !== null && !isSaturday(selectedDate) && (
           <MemberView
             memberName={members[selectedMember]}
             memberIdx={selectedMember}
-            tasks={tasks}
-            completion={completions[selectedMember] || Array(tasks.length).fill(false)}
+            tasks={effectiveTasks}
+            completion={completions[selectedMember] || Array(effectiveTasks.length).fill(false)}
             onToggle={(taskIdx) => toggleTask(selectedMember, taskIdx)}
             onBack={() => { setView('home'); setSelectedMember(null); }}
           />
         )}
 
         {view === 'admin' && !isSaturday(selectedDate) && (
-          <AdminView members={members} tasks={tasks} completions={completions} onReset={resetDay} selectedDate={selectedDate} />
+          <AdminView members={members} tasks={effectiveTasks} completions={completions} onReset={resetDay} selectedDate={selectedDate} />
         )}
 
         {view === 'report' && (
@@ -340,7 +366,7 @@ export default function App() {
         )}
 
         {view === 'settings' && (
-          <SettingsView members={members} tasks={tasks} onSave={saveConfig} />
+          <SettingsView members={members} tasks={tasks} onSave={saveConfig} onSaveDailyTasks={saveDailyTasksConfig} />
         )}
       </div>
     </div>
@@ -923,20 +949,47 @@ function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMon
   );
 }
 
-function SettingsView({ members, tasks, onSave }) {
+function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
   const [editMembers, setEditMembers] = useState([...members]);
-  const [editTasks, setEditTasks] = useState([...tasks]);
   const [savedMsg, setSavedMsg] = useState(false);
+
+  // Daily tasks state
+  const [taskDate, setTaskDate] = useState(getToday());
+  const [dailyTasks, setDailyTasks] = useState([...tasks]);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailySavedMsg, setDailySavedMsg] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      setDailyLoading(true);
+      try {
+        const snap = await getDoc(doc(db, 'daily_tasks', taskDate));
+        if (snap.exists() && snap.data().tasks?.length) {
+          setDailyTasks(snap.data().tasks);
+        } else {
+          setDailyTasks([...tasks]);
+        }
+      } catch(e) { setDailyTasks([...tasks]); }
+      setDailyLoading(false);
+    }
+    load();
+  }, [taskDate]);
+
+  async function handleSaveDailyTasks() {
+    const clean = dailyTasks.map(t => t.trim()).filter(t => t.length > 0);
+    if (clean.length === 0) { alert('يجب إضافة مهمة واحدة على الأقل'); return; }
+    if (clean.length > 10) { alert('الحد الأقصى 10 مهام'); return; }
+    await onSaveDailyTasks(taskDate, clean);
+    setDailyTasks(clean);
+    setDailySavedMsg(true);
+    setTimeout(() => setDailySavedMsg(false), 2000);
+  }
 
   function handleSave() {
     const cleanMembers = editMembers.map(m => m.trim()).filter(m => m.length > 0);
-    const cleanTasks = editTasks.map(t => t.trim()).filter(t => t.length > 0);
     if (cleanMembers.length === 0) { alert('يجب إضافة طالبة واحدة على الأقل'); return; }
-    if (cleanTasks.length === 0) { alert('يجب إضافة مهمة واحدة على الأقل'); return; }
-    if (cleanTasks.length > 10) { alert('الحد الأقصى 10 مهام'); return; }
-    onSave(cleanMembers, cleanTasks);
+    onSave(cleanMembers, tasks);
     setEditMembers(cleanMembers);
-    setEditTasks(cleanTasks);
     setSavedMsg(true);
     setTimeout(() => setSavedMsg(false), 2000);
   }
@@ -945,51 +998,67 @@ function SettingsView({ members, tasks, onSave }) {
 
   return (
     <div>
-      <div className="mb-6 p-4 rounded-2xl" style={{ background: 'rgba(236, 72, 153, 0.12)', border: '1px solid rgba(236, 72, 153, 0.28)' }}>
-        <div className="flex items-start gap-3">
-          <AlertCircle size={20} className="text-pink-300 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-pink-100 font-bold text-sm mb-1">ملاحظة هامة</p>
-            <p className="text-pink-200/70 text-xs leading-relaxed">يمكنك إضافة أو حذف الطالبات والمهام. التعديلات تنطبق على الجميع فوراً عند الضغط على "حفظ التعديلات". الحد الأقصى 10 مهام.</p>
+      {/* Daily Tasks */}
+      <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61,36,56,0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236,72,153,0.18)' }}>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h3 className="font-bold text-white text-lg flex items-center gap-2">
+            <Edit3 size={18} className="text-pink-300" />
+            <span>مهام يوم محدد</span>
+          </h3>
+          <div className="flex items-center gap-2">
+            <span className="text-pink-200/60 text-xs font-bold">التاريخ:</span>
+            <input
+              type="date"
+              value={taskDate}
+              onChange={(e) => { if (!isSaturday(e.target.value)) setTaskDate(e.target.value); }}
+              className="px-3 py-1.5 rounded-xl text-sm font-bold"
+              style={{ background: 'rgba(45,27,46,0.85)', color: '#f9c5d1', border: '1px solid rgba(236,72,153,0.3)', colorScheme: 'dark', fontFamily: 'inherit' }}
+            />
           </div>
         </div>
-      </div>
 
-      {/* Tasks */}
-      <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61, 36, 56, 0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-lg flex items-center gap-2"><Edit3 size={18} className="text-pink-300" /><span>المهام ({editTasks.length})</span></h3>
-          <button onClick={() => { if (editTasks.length < 10) setEditTasks([...editTasks, `المهمة ${editTasks.length + 1}`]); else alert('الحد الأقصى 10 مهام'); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' }}>
-            <Plus size={14} /><span>إضافة</span>
+        {dailyLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="w-7 h-7 border-3 border-pink-400 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            {dailyTasks.map((task, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>{idx + 1}</div>
+                <input type="text" value={task} onChange={(e) => { const a = [...dailyTasks]; a[idx] = e.target.value; setDailyTasks(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} placeholder={`وصف المهمة ${idx + 1}`} />
+                <button onClick={() => { if (dailyTasks.length <= 1) return; setDailyTasks(dailyTasks.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
+                  <Trash2 size={16} className="text-rose-300" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={() => { if (dailyTasks.length < 10) setDailyTasks([...dailyTasks, '']); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold text-white" style={{ background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.3)' }}>
+            <Plus size={14} /><span>إضافة مهمة</span>
           </button>
-        </div>
-        <div className="space-y-2">
-          {editTasks.map((task, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' }}>{idx + 1}</div>
-              <input type="text" value={task} onChange={(e) => { const a = [...editTasks]; a[idx] = e.target.value; setEditTasks(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} placeholder={`وصف المهمة ${idx + 1}`} />
-              <button onClick={() => { if (editTasks.length <= 1) { alert('يجب أن تبقى مهمة واحدة'); return; } if (confirm(`حذف "${editTasks[idx]}"؟`)) setEditTasks(editTasks.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
-                <Trash2 size={16} className="text-rose-300" />
-              </button>
-            </div>
-          ))}
+          <button onClick={handleSaveDailyTasks} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-bold text-white text-sm" style={{ background: dailySavedMsg ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#ec4899,#be185d)' }}>
+            {dailySavedMsg ? <><Check size={16} /><span>تم الحفظ</span></> : <><Save size={16} /><span>حفظ مهام هذا اليوم</span></>}
+          </button>
         </div>
       </div>
 
       {/* Members */}
-      <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61, 36, 56, 0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
+      <div className="rounded-2xl p-5 mb-5" style={{ background: 'rgba(61,36,56,0.55)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236,72,153,0.18)' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-white text-lg flex items-center gap-2"><Users size={18} className="text-pink-300" /><span>الطالبات ({editMembers.length})</span></h3>
-          <button onClick={() => setEditMembers([...editMembers, `الطالبة ${editMembers.length + 1}`])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' }}>
+          <button onClick={() => setEditMembers([...editMembers, `الطالبة ${editMembers.length + 1}`])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg,#ec4899,#be185d)' }}>
             <Plus size={14} /><span>إضافة</span>
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {editMembers.map((name, idx) => (
             <div key={idx} className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold flex-shrink-0 text-sm" style={{ background: 'rgba(236, 72, 153, 0.18)', border: '1px solid rgba(236, 72, 153, 0.32)', color: '#f9c5d1' }}>{idx + 1}</div>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold flex-shrink-0 text-sm" style={{ background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.32)', color: '#f9c5d1' }}>{idx + 1}</div>
               <input type="text" value={name} onChange={(e) => { const a = [...editMembers]; a[idx] = e.target.value; setEditMembers(a); }} className="flex-1 px-3 py-2.5 rounded-xl text-white text-right min-w-0" style={inputStyle} />
-              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن تبقى طالبة واحدة'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) setEditMembers(editMembers.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)' }}>
+              <button onClick={() => { if (editMembers.length <= 1) { alert('يجب أن تبقى طالبة واحدة'); return; } if (confirm(`حذف "${editMembers[idx]}"؟`)) setEditMembers(editMembers.filter((_, i) => i !== idx)); }} className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)' }}>
                 <Trash2 size={16} className="text-rose-300" />
               </button>
             </div>
@@ -997,8 +1066,8 @@ function SettingsView({ members, tasks, onSave }) {
         </div>
       </div>
 
-      <button onClick={handleSave} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-white transition-all hover:scale-[1.01] active:scale-[0.99]" style={{ background: savedMsg ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', boxShadow: '0 10px 25px -10px rgba(236, 72, 153, 0.45)' }}>
-        {savedMsg ? <><Check size={18} /><span>تم الحفظ بنجاح</span></> : <><Save size={18} /><span>حفظ التعديلات</span></>}
+      <button onClick={handleSave} className="w-full p-4 rounded-2xl flex items-center justify-center gap-2 font-bold text-white" style={{ background: savedMsg ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#ec4899,#be185d)', boxShadow: '0 10px 25px -10px rgba(236,72,153,0.45)' }}>
+        {savedMsg ? <><Check size={18} /><span>تم الحفظ بنجاح</span></> : <><Save size={18} /><span>حفظ قائمة الطالبات</span></>}
       </button>
     </div>
   );
