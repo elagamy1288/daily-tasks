@@ -742,7 +742,10 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
   const monthName = new Date(reportMonth.year, reportMonth.month - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
   const reportMembers = getReportMembers(monthlyData, days, members);
 
+  const isEarliestMonth = reportMonth.year === 2026 && reportMonth.month === 5;
+
   const prevMonth = () => {
+    if (isEarliestMonth) return;
     const d = new Date(reportMonth.year, reportMonth.month - 2, 1);
     onMonthChange({ year: d.getFullYear(), month: d.getMonth() + 1 });
   };
@@ -756,7 +759,7 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
     <div>
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-6 p-4 rounded-2xl" style={{ background: 'rgba(61, 36, 56, 0.55)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
-        <button onClick={prevMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(236, 72, 153, 0.15)', border: '1px solid rgba(236, 72, 153, 0.3)', color: '#f9c5d1' }}>
+        <button onClick={prevMonth} disabled={isEarliestMonth} className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: isEarliestMonth ? 'rgba(61,36,56,0.3)' : 'rgba(236,72,153,0.15)', border: '1px solid rgba(236,72,153,0.3)', color: isEarliestMonth ? '#4a3d52' : '#f9c5d1' }}>
           <ChevronRight size={20} />
         </button>
         <div className="text-center">
