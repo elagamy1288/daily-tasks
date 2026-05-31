@@ -140,7 +140,7 @@ export default function App() {
     }
   }
 
-  const effectiveTasks = activeTasks || tasks;
+  const effectiveTasks = activeTasks || [];
 
   function toggleTask(memberIdx, taskIdx) {
     if (isSaturday(selectedDate)) return;
@@ -310,11 +310,19 @@ export default function App() {
           </div>
         )}
 
-        {view === 'home' && !isSaturday(selectedDate) && (
+        {(view === 'home' || view === 'member' || view === 'admin') && !isSaturday(selectedDate) && effectiveTasks.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="text-6xl">📋</div>
+            <h2 className="text-2xl font-black text-white">لم تُحدَّد مهام لهذا اليوم</h2>
+            <p className="text-pink-200/60 text-sm">يمكن للمشرف إضافة المهام من صفحة الإعدادات</p>
+          </div>
+        )}
+
+        {view === 'home' && !isSaturday(selectedDate) && effectiveTasks.length > 0 && (
           <MembersGrid members={members} completions={completions} tasksCount={effectiveTasks.length} onSelect={(idx) => { setSelectedMember(idx); setView('member'); }} />
         )}
 
-        {view === 'member' && selectedMember !== null && !isSaturday(selectedDate) && (
+        {view === 'member' && selectedMember !== null && !isSaturday(selectedDate) && effectiveTasks.length > 0 && (
           <MemberView
             memberName={members[selectedMember]}
             memberIdx={selectedMember}
@@ -325,7 +333,7 @@ export default function App() {
           />
         )}
 
-        {view === 'admin' && !isSaturday(selectedDate) && (
+        {view === 'admin' && !isSaturday(selectedDate) && effectiveTasks.length > 0 && (
           <AdminView members={members} tasks={effectiveTasks} completions={completions} onReset={resetDay} selectedDate={selectedDate} />
         )}
 
@@ -967,9 +975,9 @@ function SettingsView({ members, tasks, onSave, onSaveDailyTasks }) {
         if (snap.exists() && snap.data().tasks?.length) {
           setDailyTasks(snap.data().tasks);
         } else {
-          setDailyTasks([...tasks]);
+          setDailyTasks([]);
         }
-      } catch(e) { setDailyTasks([...tasks]); }
+      } catch(e) { setDailyTasks([]); }
       setDailyLoading(false);
     }
     load();
