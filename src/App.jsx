@@ -835,6 +835,26 @@ function getDaysInReportMonth(year, month) {
   return days;
 }
 
+// أيام لوحة الشرف: حتى الأمس فقط، إلا في أول يوم بالشهر فيُحسب اليوم
+function getDaysForRanking(year, month) {
+  const today = new Date();
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
+  let lastDay;
+  if (!isCurrentMonth) {
+    lastDay = new Date(year, month, 0).getDate();
+  } else if (today.getDate() === 1) {
+    lastDay = 1; // أول يوم: أدرج اليوم
+  } else {
+    lastDay = today.getDate() - 1; // غير ذلك: حتى الأمس
+  }
+  const days = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (!isSaturday(dateKey)) days.push(dateKey);
+  }
+  return days;
+}
+
 function getMemberStats(memberIdx, days, monthlyData, defaultTasksCount) {
   let complete = 0, incomplete = 0, absent = 0;
   days.forEach(dateKey => {
@@ -886,7 +906,7 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
       </div>
 
       {/* Ranking */}
-      {!monthlyLoading && <RankingBanner members={reportMembers} tasks={tasks} monthlyData={monthlyData} days={days} />}
+      {!monthlyLoading && <RankingBanner members={reportMembers} tasks={tasks} monthlyData={monthlyData} days={getDaysForRanking(reportMonth.year, reportMonth.month)} />}
 
       {/* Legend */}
       <div className="flex items-center gap-4 mb-4 px-1 flex-wrap">
