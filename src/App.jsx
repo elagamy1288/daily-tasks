@@ -286,50 +286,51 @@ export default function App() {
             </div>
           </div>
 
-          {/* Date selector */}
-          {showDateBar && (
-            <div className="mt-4 flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => !isSaturday(getToday()) && setSelectedDate(getToday())}
-                disabled={isSaturday(getToday())}
-                className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
-                style={{
-                  background: selectedDate === getToday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
-                  color: isSaturday(getToday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getToday() ? 'white' : '#f9c5d1',
-                  border: '1px solid rgba(236, 72, 153, 0.3)',
-                  cursor: isSaturday(getToday()) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {isSaturday(getToday()) ? 'اليوم (إجازة)' : 'اليوم'}
-              </button>
-              <button
-                onClick={() => !isSaturday(getYesterday()) && setSelectedDate(getYesterday())}
-                disabled={isSaturday(getYesterday())}
-                className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
-                style={{
-                  background: selectedDate === getYesterday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
-                  color: isSaturday(getYesterday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getYesterday() ? 'white' : '#f9c5d1',
-                  border: '1px solid rgba(236, 72, 153, 0.3)',
-                  cursor: isSaturday(getYesterday()) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {isSaturday(getYesterday()) ? 'أمس (إجازة)' : 'أمس'}
-              </button>
-              <span className="text-pink-200/60 text-sm flex items-center gap-1">
-                <Calendar size={13} />
-                {formatDisplayDate(selectedDate)}
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Navigation */}
-        <div className="grid grid-cols-4 gap-1 mb-8 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
+        <div className="grid grid-cols-4 gap-1 mb-4 p-1.5 rounded-2xl" style={{ background: 'rgba(45, 27, 46, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(236, 72, 153, 0.18)' }}>
           <NavButton active={view === 'home' || view === 'member'} onClick={() => guardedNav(() => { setView('home'); setSelectedMember(null); })} icon={<Users size={16} />} label="الطالبات" />
           <NavButton active={view === 'mutabaah' || view === 'memberReport'} onClick={() => guardedNav(() => setView('mutabaah'))} icon={<BarChart2 size={16} />} label="المتابعة" />
           <NavButton active={view === 'tajweed'} onClick={() => guardedNav(() => isAdmin ? setView('tajweed') : (setPasswordTarget('tajweed'), setShowPasswordPrompt(true)))} icon={<Star size={16} />} label="التجويد" locked={!isAdmin} />
           <NavButton active={view === 'settings'} onClick={() => isAdmin ? setView('settings') : (setPasswordTarget('settings'), setShowPasswordPrompt(true))} icon={<Settings size={16} />} label="الإعدادات" locked={!isAdmin} />
         </div>
+
+        {/* Date selector */}
+        {showDateBar && (
+          <div className="mb-6 flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => !isSaturday(getToday()) && setSelectedDate(getToday())}
+              disabled={isSaturday(getToday())}
+              className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
+              style={{
+                background: selectedDate === getToday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
+                color: isSaturday(getToday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getToday() ? 'white' : '#f9c5d1',
+                border: '1px solid rgba(236, 72, 153, 0.3)',
+                cursor: isSaturday(getToday()) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isSaturday(getToday()) ? 'اليوم (إجازة)' : 'اليوم'}
+            </button>
+            <button
+              onClick={() => !isSaturday(getYesterday()) && setSelectedDate(getYesterday())}
+              disabled={isSaturday(getYesterday())}
+              className="px-4 py-2 rounded-xl font-bold text-sm transition-all"
+              style={{
+                background: selectedDate === getYesterday() ? 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)' : 'rgba(61, 36, 56, 0.55)',
+                color: isSaturday(getYesterday()) ? 'rgba(249,197,209,0.3)' : selectedDate === getYesterday() ? 'white' : '#f9c5d1',
+                border: '1px solid rgba(236, 72, 153, 0.3)',
+                cursor: isSaturday(getYesterday()) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isSaturday(getYesterday()) ? 'أمس (إجازة)' : 'أمس'}
+            </button>
+            <span className="text-pink-200/60 text-sm flex items-center gap-1">
+              <Calendar size={13} />
+              {formatDisplayDate(selectedDate)}
+            </span>
+          </div>
+        )}
 
         {/* Views */}
         {(view === 'home' || view === 'member' || (view === 'mutabaah' && mutabaahTab === 'daily')) && isSaturday(selectedDate) && (
