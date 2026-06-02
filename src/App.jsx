@@ -873,7 +873,7 @@ function getMemberStats(memberIdx, days, monthlyData, defaultTasksCount) {
 function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, onMonthChange, onMemberDetail, onRefresh }) {
   const today = new Date();
   const isCurrentMonth = reportMonth.year === today.getFullYear() && reportMonth.month === today.getMonth() + 1;
-  const days = getDaysInReportMonth(reportMonth.year, reportMonth.month);
+  const days = getDaysForRanking(reportMonth.year, reportMonth.month);
   const monthName = new Date(reportMonth.year, reportMonth.month - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
   const reportMembers = getReportMembers(monthlyData, days, members);
 
@@ -970,7 +970,7 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
 }
 
 function MemberReportView({ memberName, memberIdx, tasks, monthlyData, reportMonth, onBack }) {
-  const days = getDaysInReportMonth(reportMonth.year, reportMonth.month);
+  const days = getDaysForRanking(reportMonth.year, reportMonth.month);
   const monthName = new Date(reportMonth.year, reportMonth.month - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
   const stats = getMemberStats(memberIdx, days, monthlyData, tasks.length);
 
