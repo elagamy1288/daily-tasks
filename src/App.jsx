@@ -949,9 +949,11 @@ function ReportView({ members, tasks, monthlyData, monthlyLoading, reportMonth, 
                   {/* Mini sparkline */}
                   <div className="flex gap-px mt-1.5 overflow-hidden">
                     {days.map((dateKey, dIdx) => {
-                      const c = ((monthlyData[dateKey] || {}).completions || {})[idx] || [];
+                      const dayData = monthlyData[dateKey] || {};
+                      const c = (dayData.completions || {})[idx] || [];
                       const done = c.filter(Boolean).length;
-                      const bg = done === tasks.length && tasks.length > 0 ? '#10b981' : done > 0 ? '#f59e0b' : '#f43f5e';
+                      const dayTasksCount = dayData.tasksCount || tasks.length;
+                      const bg = done === dayTasksCount && dayTasksCount > 0 ? '#10b981' : done > 0 ? '#f59e0b' : '#f43f5e';
                       return <div key={dIdx} style={{ width: 4, height: 12, borderRadius: 2, background: bg, opacity: 0.85, flexShrink: 0 }}></div>;
                     })}
                   </div>
